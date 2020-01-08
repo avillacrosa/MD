@@ -1,4 +1,6 @@
 /depured-lammps/default_output/
+/depured-lammps/.idea/
+/lammps/.idea
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
