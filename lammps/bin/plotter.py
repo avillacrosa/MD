@@ -23,6 +23,7 @@ import definitions
 xtc = '/home/adria/perdiux/prod/lammps/dignon/cpeb4d4/A-syn_HPS_100000_frames.atom'
 nrg = '/home/adria/perdiux/prod/lammps/dignon/cpeb4d4/obs.data'
 
+#STUPID CHANGE FOR COMMIT
 
 def plot_rgs(dir, equil=4000000):
     rg_frame, Is = calc.rg_from_lmp(dir, equil)
