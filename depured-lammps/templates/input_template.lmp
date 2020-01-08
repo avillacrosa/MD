@@ -1,0 +1,40 @@
+# Multiprotein complexes
+
+units       real
+dimension   3
+boundary    p p p
+atom_style  full
+
+bond_style  harmonic
+pair_style  ljlambda $debye 0.0 35.0
+dielectric  80.0
+
+read_data   data.data
+
+# pairwise coefficients
+
+bond_coeff          1     9.600     3.8
+
+$pair_coeff
+
+special_bonds fene
+neighbor  3.5 multi
+neigh_modify  every 10 delay 0
+
+comm_style    tiled
+timestep      10.0
+
+velocity      all create $temp $v_seed
+fix           fxnve  all nve
+fix           fxlange all langevin $temp $temp 10000 $langevin_seed
+
+compute rg all gyration
+
+thermo        10000
+thermo_style  custom step pe ke temp c_rg
+thermo_modify flush yes
+
+#dump          VMD1 all xtc 10000 hps_traj.xtc
+#dump_modify   VMD1 unwrap yes
+#dump          new_dump all atom 10000 hps_traj.atom
+run           100000

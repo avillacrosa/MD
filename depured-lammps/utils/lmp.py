@@ -1,0 +1,155 @@
+import numpy as np
+import os
+import definitions
+import glob
+import pathlib
+
+
+class LMP:
+    def __init__(self, oliba_wd, temper=False):
+        self.sequence = None
+        self.res_dict = definitions.residues
+
+        self.o_wd = oliba_wd
+        self.p_wd = oliba_wd.replace('/perdiux', '')
+
+        self.lmp_drs = self.get_lmp_dirs()
+        self.n_drs = len(self.lmp_drs)
+        if temper:
+            self.data = self.get_lmp_temper_data()
+        else:
+            self.data = self.get_lmp_data()
+        self.lmp2pdb = '/home/adria/perdiux/src/lammps-7Aug19/tools/ch2lmp/lammps2pdb.pl'
+
+    def get_lmp_dirs(self):
+        dirs = []
+        for filename in pathlib.Path(self.o_wd).rglob('*lmp'):
+            dirs.append(os.path.dirname(filename))
+        dirs.sort()
+        return dirs
+
+    def make_initial_frames(self):
+        pdb_paths = []
+        for dir in self.lmp_drs:
+            lammps2pdb = self.lmp2pdb
+            os.system(lammps2pdb + ' ' + dir)
+            fileout = dir + '_trj.pdb'
+            pdb_paths.append(fileout)
+        return pdb_paths
+
+    def get_lmp_data(self):
+        data = []
+        for d in self.lmp_drs:
+            log_lmp = open(os.path.join(d, 'log.lammps'), 'r')
+            lines = log_lmp.readlines()
+            data_start = 0
+            data_end = 0
+            for i, line in enumerate(lines):
+                if "Step" in line:
+                    data_start = i + 1
+                if "Loop" in line:
+                    data_end = i
+                if data_end and data_start != 0:
+                    break
+            if data_end == 0:
+                data_end = len(lines)
+            data.append(
+                np.loadtxt(os.path.join(d, 'log.lammps'), skiprows=data_start, max_rows=data_end - data_start))
+        data = np.array(data)
+        return data
+
+    def get_lmp_temper_data(self):
+        data = []
+        for d in self.lmp_drs:
+            # lmps = glob.glob(os.path.join(d, "log.lammps.*"))
+            # print(lmps)
+            lmps = [
+                '/home/adria/perdiux/prod/lammps/dignon/RE-T-hnRPA/log.lammps.0',
+                '/home/adria/perdiux/prod/lammps/dignon/RE-T-hnRPA/log.lammps.1',
+                '/home/adria/perdiux/prod/lammps/dignon/RE-T-hnRPA/log.lammps.2',
+                '/home/adria/perdiux/prod/lammps/dignon/RE-T-hnRPA/log.lammps.3',
+                '/home/adria/perdiux/prod/lammps/dignon/RE-T-hnRPA/log.lammps.4',
+                '/home/adria/perdiux/prod/lammps/dignon/RE-T-hnRPA/log.lammps.5',
+                '/home/adria/perdiux/prod/lammps/dignon/RE-T-hnRPA/log.lammps.6',
+                '/home/adria/perdiux/prod/lammps/dignon/RE-T-hnRPA/log.lammps.7',
+                '/home/adria/perdiux/prod/lammps/dignon/RE-T-hnRPA/log.lammps.8',
+                '/home/adria/perdiux/prod/lammps/dignon/RE-T-hnRPA/log.lammps.9',
+                '/home/adria/perdiux/prod/lammps/dignon/RE-T-hnRPA/log.lammps.10',
+                '/home/adria/perdiux/prod/lammps/dignon/RE-T-hnRPA/log.lammps.11',
+            ]
+            # TODO ACTUAL SORT
+            print(lmps)
+            # lmps.sort()
+            for lmp in lmps:
+                log_lmp = open(os.path.join(d, lmp), 'r')
+                lines = log_lmp.readlines()
+                data_start = 0
+                data_end = 0
+                for i, line in enumerate(lines):
+                    if "Step" in line:
+                        data_start = i + 1
+                    if "Loop" in line:
+                        data_end = i
+                    if data_end and data_start != 0:
+                        break
+                if data_end == 0:
+                    data_end = len(lines)
+                data.append(
+                    np.loadtxt(os.path.join(d, lmp), skiprows=data_start, max_rows=data_end - data_start))
+        data = np.array(data)
+        return data
+
+    def set_sequence(self, seq, from_file=False):
+        if from_file:
+            print("TODO")
+        self.sequence = seq
+
+    def decode_seq_from_hps(self):
+        for lmp_dir in self.lmp_drs:
+            data_paths = glob.glob(os.path.join(lmp_dir, "*.data"))
+            data_path = data_paths[0]
+            with open(data_path, 'r') as data_file:
+                lines = data_file.readlines()
+                mass_range, atom_range = [0, 0], [0, 0]
+                reading_masses, reading_atoms = False, False
+                # TODO Not too smart
+                for i, line in enumerate(lines):
+
+                    if "Atoms" in line:
+                        reading_masses = False
+                        # TODO Funny how if I dont substract 1 it doesnt work for RAMONS case but does for mine
+                        mass_range[1] = i - 1
+
+                    if reading_masses and line != '\n' and mass_range[0] == 0:
+                        mass_range[0] = i
+
+                    if "Masses" in line:
+                        reading_masses = True
+
+                    if "Bonds" in line:
+                        reading_atoms = False
+                        atom_range[1] = i - 1
+
+                    if reading_atoms and line != '\n' and atom_range[0] == 0:
+                        atom_range[0] = i
+
+                    if "Atoms" in line:
+                        reading_atoms = True
+            print(mass_range, lines[mass_range[1]])
+            masses = np.loadtxt(data_path, skiprows=mass_range[0], max_rows=mass_range[1] - mass_range[0])
+            atoms = np.loadtxt(data_path, skiprows=atom_range[0], max_rows=atom_range[1] - atom_range[0])
+            mass_dict = {}
+            for mass in masses:
+                for res in self.res_dict:
+                    if self.res_dict[res]["mass"] == mass[1]:
+                        mass_dict[int(mass[0])] = res
+                        break
+            seq = []
+            for atom in atoms:
+                seq.append(mass_dict[atom[2]])
+            seq_str = ''.join(seq)
+            print(
+                "Finding used sequence. Note that Isoleucine and Leucine have the same exact HPS parameters. Therefore, they are not distinguishable.")
+            return seq_str
+
+# TODO Handle Temperatures or Ionic strengths...

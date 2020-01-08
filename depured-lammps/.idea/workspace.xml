@@ -1,0 +1,585 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ChangeListManager">
+    <list default="true" id="963d7a03-b6e6-40b4-b055-5937ab522ce4" name="Default Changelist" comment="" />
+    <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="FUSProjectUsageTrigger">
+    <session id="1095613671">
+      <usages-collector id="statistics.lifecycle.project">
+        <counts>
+          <entry key="project.closed" value="2" />
+          <entry key="project.open.time.25" value="1" />
+          <entry key="project.open.time.29" value="1" />
+          <entry key="project.open.time.30" value="2" />
+          <entry key="project.open.time.34" value="1" />
+          <entry key="project.opened" value="5" />
+        </counts>
+      </usages-collector>
+      <usages-collector id="statistics.file.extensions.open">
+        <counts>
+          <entry key="lmp" value="1" />
+          <entry key="png" value="38" />
+          <entry key="py" value="7" />
+          <entry key="seq" value="1" />
+        </counts>
+      </usages-collector>
+      <usages-collector id="statistics.file.types.open">
+        <counts>
+          <entry key="Image" value="38" />
+          <entry key="PLAIN_TEXT" value="2" />
+          <entry key="Python" value="7" />
+        </counts>
+      </usages-collector>
+      <usages-collector id="statistics.file.extensions.edit">
+        <counts>
+          <entry key="lmp" value="29" />
+          <entry key="py" value="2032" />
+        </counts>
+      </usages-collector>
+      <usages-collector id="statistics.file.types.edit">
+        <counts>
+          <entry key="PLAIN_TEXT" value="29" />
+          <entry key="Python" value="2032" />
+        </counts>
+      </usages-collector>
+    </session>
+    <session id="1704587856">
+      <usages-collector id="statistics.lifecycle.project">
+        <counts>
+          <entry key="project.closed" value="7" />
+          <entry key="project.open.time.26" value="2" />
+          <entry key="project.open.time.27" value="1" />
+          <entry key="project.open.time.29" value="1" />
+          <entry key="project.open.time.30" value="1" />
+          <entry key="project.open.time.32" value="1" />
+          <entry key="project.open.time.33" value="1" />
+          <entry key="project.open.time.35" value="1" />
+          <entry key="project.open.time.38" value="2" />
+          <entry key="project.open.time.39" value="1" />
+          <entry key="project.open.time.42" value="1" />
+          <entry key="project.open.time.43" value="1" />
+          <entry key="project.open.time.46" value="1" />
+          <entry key="project.opened" value="14" />
+        </counts>
+      </usages-collector>
+      <usages-collector id="statistics.file.extensions.open">
+        <counts>
+          <entry key="dat" value="14" />
+          <entry key="data" value="6" />
+          <entry key="lmp" value="27" />
+          <entry key="py" value="37" />
+          <entry key="qsub" value="1" />
+          <entry key="seq" value="1" />
+        </counts>
+      </usages-collector>
+      <usages-collector id="statistics.file.types.open">
+        <counts>
+          <entry key="PLAIN_TEXT" value="49" />
+          <entry key="Python" value="37" />
+        </counts>
+      </usages-collector>
+      <usages-collector id="statistics.file.extensions.edit">
+        <counts>
+          <entry key="dat" value="9" />
+          <entry key="data" value="3" />
+          <entry key="dummy" value="25" />
+          <entry key="lmp" value="21" />
+          <entry key="py" value="11139" />
+        </counts>
+      </usages-collector>
+      <usages-collector id="statistics.file.types.edit">
+        <counts>
+          <entry key="PLAIN_TEXT" value="58" />
+          <entry key="Python" value="11139" />
+        </counts>
+      </usages-collector>
+    </session>
+  </component>
+  <component name="FavoritesManager">
+    <favorites_list name="lammps" />
+  </component>
+  <component name="FileEditorManager">
+    <leaf SIDE_TABS_SIZE_LIMIT_KEY="300">
+      <file pinned="false" current-in-tab="true">
+        <entry file="file://$PROJECT_DIR$/utils/lmpsetup.py">
+          <provider selected="true" editor-type-id="text-editor">
+            <state relative-caret-position="525">
+              <caret line="158" column="12" lean-forward="true" selection-start-line="158" selection-start-column="12" selection-end-line="158" selection-end-column="12" />
+              <folding>
+                <element signature="e#0#18#0" expanded="true" />
+              </folding>
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file pinned="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/default_output/hps.lmp">
+          <provider selected="true" editor-type-id="text-editor">
+            <state relative-caret-position="240">
+              <caret line="65" column="17" selection-end-line="194" />
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file pinned="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/utils/definitions.py">
+          <provider selected="true" editor-type-id="text-editor">
+            <state relative-caret-position="180">
+              <caret line="15" column="22" selection-start-line="15" selection-start-column="22" selection-end-line="15" selection-end-column="22" />
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file pinned="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/bin/testing.py">
+          <provider selected="true" editor-type-id="text-editor">
+            <state relative-caret-position="225">
+              <caret line="15" column="60" selection-start-line="15" selection-start-column="60" selection-end-line="15" selection-end-column="60" />
+              <folding>
+                <element signature="e#0#10#0" expanded="true" />
+              </folding>
+            </state>
+          </provider>
+        </entry>
+      </file>
+    </leaf>
+  </component>
+  <component name="FileTemplateManagerImpl">
+    <option name="RECENT_TEMPLATES">
+      <list>
+        <option value="Python Script" />
+      </list>
+    </option>
+  </component>
+  <component name="FindInProjectRecents">
+    <findStrings>
+      <find>cpeb4_seq</find>
+      <find>autocorr</find>
+      <find>dir_pairs</find>
+      <find>ref_dir</find>
+      <find>M</find>
+      <find>data</find>
+      <find>kappas</find>
+      <find>make_initial_frames</find>
+      <find>de</find>
+      <find>definitions.residues</find>
+      <find>lambda</find>
+      <find>print</find>
+      <find>sorted</find>
+      <find>sigmas</find>
+      <find>sorted_residues</find>
+    </findStrings>
+  </component>
+  <component name="IdeDocumentHistory">
+    <option name="CHANGED_PATHS">
+      <list>
+        <option value="$PROJECT_DIR$/utils/lmpmath.py" />
+        <option value="$PROJECT_DIR$/bin/plotter.py" />
+        <option value="$PROJECT_DIR$/data/asyn.seq" />
+        <option value="$PROJECT_DIR$/utils/conversion.py" />
+        <option value="$PROJECT_DIR$/bin/advanced_setup.py" />
+        <option value="$PROJECT_DIR$/utils/Analysis.py" />
+        <option value="$PROJECT_DIR$/utils/LMP.py" />
+        <option value="$PROJECT_DIR$/utils/LMPSetup.py" />
+        <option value="$PROJECT_DIR$/utils/lmpsetup-TODO.py" />
+        <option value="$PROJECT_DIR$/utils/calc.py" />
+        <option value="$PROJECT_DIR$/templates/topo_template.data" />
+        <option value="$PROJECT_DIR$/data/lambdas.dat" />
+        <option value="$PROJECT_DIR$/utils/definitions.py" />
+        <option value="$PROJECT_DIR$/templates/input_template.lmp" />
+        <option value="$PROJECT_DIR$/utils/lmp.py" />
+        <option value="$PROJECT_DIR$/utils/analysis.py" />
+        <option value="$PROJECT_DIR$/data/lambda_pairs.dat" />
+        <option value="$PROJECT_DIR$/default_output/hps.lmp" />
+        <option value="$PROJECT_DIR$/data/sigmas.dat" />
+        <option value="$PROJECT_DIR$/bin/testing.py" />
+        <option value="$PROJECT_DIR$/utils/lmpsetup.py" />
+      </list>
+    </option>
+  </component>
+  <component name="ProjectFrameBounds" extendedState="6">
+    <option name="y" value="25" />
+    <option name="width" value="683" />
+    <option name="height" value="743" />
+  </component>
+  <component name="ProjectId" id="1Umyl3HVTiIvHe69wImU2rVNxOe" />
+  <component name="ProjectView">
+    <navigator proportions="" version="1">
+      <foldersAlwaysOnTop value="true" />
+    </navigator>
+    <panes>
+      <pane id="ProjectPane">
+        <subPane>
+          <expand>
+            <path>
+              <item name="depured-lammps" type="b2602c69:ProjectViewProjectNode" />
+              <item name="depured-lammps" type="462c0819:PsiDirectoryNode" />
+            </path>
+            <path>
+              <item name="depured-lammps" type="b2602c69:ProjectViewProjectNode" />
+              <item name="depured-lammps" type="462c0819:PsiDirectoryNode" />
+              <item name="bin" type="462c0819:PsiDirectoryNode" />
+            </path>
+            <path>
+              <item name="depured-lammps" type="b2602c69:ProjectViewProjectNode" />
+              <item name="depured-lammps" type="462c0819:PsiDirectoryNode" />
+              <item name="data" type="462c0819:PsiDirectoryNode" />
+            </path>
+            <path>
+              <item name="depured-lammps" type="b2602c69:ProjectViewProjectNode" />
+              <item name="depured-lammps" type="462c0819:PsiDirectoryNode" />
+              <item name="default_output" type="462c0819:PsiDirectoryNode" />
+            </path>
+            <path>
+              <item name="depured-lammps" type="b2602c69:ProjectViewProjectNode" />
+              <item name="depured-lammps" type="462c0819:PsiDirectoryNode" />
+              <item name="templates" type="462c0819:PsiDirectoryNode" />
+            </path>
+            <path>
+              <item name="depured-lammps" type="b2602c69:ProjectViewProjectNode" />
+              <item name="depured-lammps" type="462c0819:PsiDirectoryNode" />
+              <item name="utils" type="462c0819:PsiDirectoryNode" />
+            </path>
+          </expand>
+          <select />
+        </subPane>
+      </pane>
+      <pane id="Scope" />
+    </panes>
+  </component>
+  <component name="PropertiesComponent">
+    <property name="last_opened_file_path" value="$PROJECT_DIR$" />
+    <property name="run.code.analysis.last.selected.profile" value="aDefault" />
+  </component>
+  <component name="RecentsManager">
+    <key name="CopyFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$/data" />
+      <recent name="$PROJECT_DIR$/templates" />
+    </key>
+    <key name="MoveFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$/utils" />
+      <recent name="$PROJECT_DIR$/data" />
+    </key>
+  </component>
+  <component name="RunDashboard">
+    <option name="ruleStates">
+      <list>
+        <RuleState>
+          <option name="name" value="ConfigurationTypeDashboardGroupingRule" />
+        </RuleState>
+        <RuleState>
+          <option name="name" value="StatusDashboardGroupingRule" />
+        </RuleState>
+      </list>
+    </option>
+  </component>
+  <component name="RunManager" selected="Python.testing">
+    <configuration name="advanced_setup" type="PythonConfigurationType" factoryName="Python" temporary="true">
+      <module name="lammps" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/bin" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/bin/advanced_setup.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <configuration name="conversion" type="PythonConfigurationType" factoryName="Python" temporary="true">
+      <module name="lammps" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/utils" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/utils/conversion-DONE.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <configuration name="foo" type="PythonConfigurationType" factoryName="Python" temporary="true">
+      <module name="lammps" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/bin" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/bin/foo.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <configuration name="plotter" type="PythonConfigurationType" factoryName="Python" temporary="true">
+      <module name="lammps" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/bin" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/bin/plotter.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <configuration name="testing" type="PythonConfigurationType" factoryName="Python" temporary="true">
+      <module name="lammps" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/bin" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/bin/testing.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <list>
+      <item itemvalue="Python.advanced_setup" />
+      <item itemvalue="Python.conversion" />
+      <item itemvalue="Python.plotter" />
+      <item itemvalue="Python.foo" />
+      <item itemvalue="Python.testing" />
+    </list>
+    <recent_temporary>
+      <list>
+        <item itemvalue="Python.testing" />
+        <item itemvalue="Python.plotter" />
+        <item itemvalue="Python.advanced_setup" />
+        <item itemvalue="Python.foo" />
+        <item itemvalue="Python.conversion" />
+      </list>
+    </recent_temporary>
+  </component>
+  <component name="SvnConfiguration">
+    <configuration />
+  </component>
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="Default task">
+      <changelist id="963d7a03-b6e6-40b4-b055-5937ab522ce4" name="Default Changelist" comment="" />
+      <created>1575976212924</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1575976212924</updated>
+    </task>
+    <servers />
+  </component>
+  <component name="ToolWindowManager">
+    <frame x="0" y="25" width="1366" height="743" extended-state="6" />
+    <editor active="true" />
+    <layout>
+      <window_info active="true" content_ui="combo" id="Project" order="0" sideWeight="0.499187" visible="true" weight="0.13328369" />
+      <window_info id="Structure" order="1" sideWeight="0.500813" side_tool="true" weight="0.111690246" />
+      <window_info id="Favorites" order="2" side_tool="true" />
+      <window_info anchor="bottom" id="Message" order="0" />
+      <window_info anchor="bottom" id="Find" order="1" />
+      <window_info anchor="bottom" id="Run" order="2" visible="true" weight="0.14796747" />
+      <window_info anchor="bottom" id="Debug" order="3" weight="0.4" />
+      <window_info anchor="bottom" id="Cvs" order="4" weight="0.25" />
+      <window_info anchor="bottom" id="Inspection" order="5" weight="0.4" />
+      <window_info anchor="bottom" id="TODO" order="6" />
+      <window_info anchor="bottom" id="Version Control" order="7" show_stripe_button="false" />
+      <window_info anchor="bottom" id="Terminal" order="8" />
+      <window_info anchor="bottom" id="Event Log" order="9" side_tool="true" />
+      <window_info anchor="bottom" id="Python Console" order="10" />
+      <window_info anchor="right" id="Commander" internal_type="SLIDING" order="0" type="SLIDING" weight="0.4" />
+      <window_info anchor="right" id="Ant Build" order="1" weight="0.25" />
+      <window_info anchor="right" content_ui="combo" id="Hierarchy" order="2" weight="0.25" />
+    </layout>
+  </component>
+  <component name="VcsContentAnnotationSettings">
+    <option name="myLimit" value="2678400000" />
+  </component>
+  <component name="editorHistoryManager">
+    <entry file="file://$PROJECT_DIR$/default_output/7D-0.051-fit.png" />
+    <entry file="file://$PROJECT_DIR$/default_output/7D-0.162-aas_map.png" />
+    <entry file="file://$PROJECT_DIR$/default_output/7D-0.205-aas_map.png" />
+    <entry file="file://$PROJECT_DIR$/default_output/7D-0.178-aas_map.png" />
+    <entry file="file://$PROJECT_DIR$/default_output/7D-0.162-fit.png" />
+    <entry file="file://$PROJECT_DIR$/default_output/flory_is.png" />
+    <entry file="file://$PROJECT_DIR$/default_output/12D-0.051-aas_map.png" />
+    <entry file="file://$PROJECT_DIR$/default_output/12D-0.051-fit.png" />
+    <entry file="file://$PROJECT_DIR$/default_output/12flory_is.png" />
+    <entry file="file://$PROJECT_DIR$/default_output/l0flory_is.png" />
+    <entry file="file://$PROJECT_DIR$/default_output/7D-0.051-aas_map.png" />
+    <entry file="file://$PROJECT_DIR$/default_output/WT-0.051-aas_map.png" />
+    <entry file="file://$PROJECT_DIR$/default_output/WT-0.103-aas_map.png" />
+    <entry file="file://$PROJECT_DIR$/default_output/WT-0.103-fit.png" />
+    <entry file="file://$PROJECT_DIR$/default_output/WT-0.136-fit.png" />
+    <entry file="file://$PROJECT_DIR$/default_output/WT-0.162-fit.png" />
+    <entry file="file://$PROJECT_DIR$/default_output/WT-0.178-fit.png" />
+    <entry file="file://$PROJECT_DIR$/default_output/WT-0.051-fit.png" />
+    <entry file="file://$PROJECT_DIR$/default_output/7D-0.136-fit.png" />
+    <entry file="file://$PROJECT_DIR$/default_output/refit-fit.png" />
+    <entry file="file://$PROJECT_DIR$/default_output/RE-fit-WT-0.103-aas_map.png" />
+    <entry file="file://$PROJECT_DIR$/default_output/res_map0H.png" />
+    <entry file="file://$PROJECT_DIR$/data/asyn.seq">
+      <provider selected="true" editor-type-id="text-editor">
+        <state>
+          <caret column="42" selection-end-column="140" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/default_output/RE-WT-0.103-aas_map.png" />
+    <entry file="file://$PROJECT_DIR$/default_output/res_map.png" />
+    <entry file="file://$PROJECT_DIR$/default_output/double_l0_rg.png" />
+    <entry file="file://$PROJECT_DIR$/default_output/l0_autocorr.png" />
+    <entry file="file://$PROJECT_DIR$/utils/conversion-DONE.py" />
+    <entry file="file://$PROJECT_DIR$/utils/lmpsetup-TODO.py" />
+    <entry file="file://$PROJECT_DIR$/utils/lmpmath.py" />
+    <entry file="file://$PROJECT_DIR$/utils/precalc.py" />
+    <entry file="file://$PROJECT_DIR$/utils/calc.py" />
+    <entry file="file://$PROJECT_DIR$/bin/foo.py" />
+    <entry file="file://$PROJECT_DIR$/bin/plotter.py" />
+    <entry file="file://$PROJECT_DIR$/bin/advanced_setup.py" />
+    <entry file="file://$PROJECT_DIR$/default_output/hps.qsub">
+      <provider selected="true" editor-type-id="text-editor" />
+    </entry>
+    <entry file="file://$PROJECT_DIR$/templates/input_template.lmp">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="240">
+          <caret line="16" selection-start-line="16" selection-end-line="16" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/templates/topo_template.data">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="120">
+          <caret line="8" column="23" selection-start-line="8" selection-start-column="23" selection-end-line="8" selection-end-column="23" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/data/hnRPA2_CTD.seq">
+      <provider selected="true" editor-type-id="text-editor">
+        <state>
+          <caret column="14" selection-end-column="152" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/utils/lmp.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="-652">
+          <caret line="80" column="22" selection-start-line="80" selection-start-column="22" selection-end-line="80" selection-end-column="22" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/data/lambda_pairs.dat">
+      <provider selected="true" editor-type-id="text-editor" />
+    </entry>
+    <entry file="file://$PROJECT_DIR$/default_output/hps.data">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="285">
+          <caret line="167" column="80" lean-forward="true" selection-start-line="167" selection-start-column="80" selection-end-line="167" selection-end-column="80" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/data/sigmas_ref.dat">
+      <provider selected="true" editor-type-id="text-editor" />
+    </entry>
+    <entry file="file://$PROJECT_DIR$/utils/analysis.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="390">
+          <caret line="33" column="35" selection-start-line="33" selection-start-column="35" selection-end-line="33" selection-end-column="35" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/bin/testing.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="225">
+          <caret line="15" column="60" selection-start-line="15" selection-start-column="60" selection-end-line="15" selection-end-column="60" />
+          <folding>
+            <element signature="e#0#10#0" expanded="true" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/data/lambdas.dat">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="105">
+          <caret line="7" column="12" selection-start-line="7" selection-start-column="12" selection-end-line="7" selection-end-column="12" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/utils/definitions.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="180">
+          <caret line="15" column="22" selection-start-line="15" selection-start-column="22" selection-end-line="15" selection-end-column="22" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/data/sigmas.dat">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="150">
+          <caret line="10" column="8" selection-start-line="10" selection-start-column="8" selection-end-line="10" selection-end-column="8" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/default_output/hps.lmp">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="240">
+          <caret line="65" column="17" selection-end-line="194" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/utils/lmpsetup.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="525">
+          <caret line="158" column="12" lean-forward="true" selection-start-line="158" selection-start-column="12" selection-end-line="158" selection-end-column="12" />
+          <folding>
+            <element signature="e#0#18#0" expanded="true" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+  </component>
+</project>
