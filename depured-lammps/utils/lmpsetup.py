@@ -1,10 +1,12 @@
 import definitions
 import scipy.constants as cnt
 import numpy as np
-from collections import OrderedDict
+import multiprocessing as mp
+from subprocess import run, PIPE
 import shutil
 import os
-import decimal
+import glob
+import mdtraj as md
 from string import Template
 
 
@@ -17,10 +19,16 @@ class LMPSetup:
         self.temperature = 300
         self.ionic_strength = 100e-3
         self.debye_wv = 1/self.debye_length()
+        self.dt = 10.
+        self.t = 10000000
+        self.xyz = None
 
         self.seq_charge = None
-        self.residue_dict = definitions.residues
+        self.residue_dict = dict(definitions.residues)
         self.key_ordering = list(self.residue_dict.keys())
+
+        self.lmp = '/home/adria/local/lammps/bin/lmp'
+        self.box_size = 2500
 
         self.hps_epsilon = 0.2
         self.hps_pairs = None
@@ -87,8 +95,6 @@ class LMPSetup:
         if from_file:
             lambda_gen = np.genfromtxt(from_file)
             count = 0
-        print(len(self.key_ordering))
-        print(self.key_ordering)
         for i in range(len(self.key_ordering)):
             for j in range(i, len(self.key_ordering)):
                 res_i = self.residue_dict[self.key_ordering[i]]
@@ -105,8 +111,6 @@ class LMPSetup:
                 line = 'pair_coeff         {:2d}      {:2d}       {:.6f}   {:.3f}    {:.6f}  {:6.3f}  {:6.3f}\n'.format(
                     i + 1, j + 1, self.hps_epsilon, sigma_ij, lambda_ij, 3 * sigma_ij, cutoff)
                 lines.append(line)
-            self.hps_pairs = lines
-
         self.hps_pairs = lines
 
     def write_hps_files(self, output_dir='default'):
@@ -122,7 +126,7 @@ class LMPSetup:
         topo_template = Template(topo_temp_file.read())
         topo_subst = topo_template.safe_substitute(self.topo_file_dict)
 
-        lmp_temp_file = open('../templates/input_template.lmp')
+        lmp_temp_file = open('../templates/general/input_template.lmp')
         lmp_template = Template(lmp_temp_file.read())
         lmp_subst = lmp_template.safe_substitute(self.lmp_file_dict)
 
@@ -142,9 +146,51 @@ class LMPSetup:
             shutil.copyfile(f'../default_output/{self.job_name}.qsub', os.path.join(output_dir, f'{self.job_name}.qsub'))
             shutil.copyfile(f'../default_output/hps.lmp', os.path.join(output_dir, 'lmp.lmp'))
 
+    def run(self, file, n_cores=1):
+        if n_cores > mp.cpu_count():
+            raise SystemExit(f'Desired number of cores exceed available cores on this machine ({mp.cpu_count()})')
+        if n_cores > 1:
+            command = f'mpirun -n {n_cores} {self.lmp} -in {file}'
+        elif n_cores == 1:
+            command = f'{self.lmp} -in {file}'
+        else:
+            raise SystemExit('Invalid core number')
+        out = run(command.split(), stdout=PIPE, stderr=PIPE, universal_newlines=True)
+        print(out)
+        return out
+
+    def get_equilibration_pdb(self):
+
+        lmp2pdb = '/home/adria/perdiux/src/lammps-7Aug19/tools/ch2lmp/lammps2pdb.pl'
+
+        meta_maker = LMPSetup(self.o_wd, self.sequence)
+        meta_maker.t = 1000
+        meta_maker.del_missing_aas()
+        meta_maker.get_hps_params()
+        meta_maker.get_hps_pairs()
+        meta_maker.write_hps_files(output_dir=None)
+        os.chdir('/home/adria/scripts/depured-lammps/default_output')
+        self.run('hps.lmp', n_cores=1)
+
+        file = '../default_output/hps'
+        os.system(lmp2pdb + ' ' + file)
+        fileout = file + '_trj.pdb'
+
+        traj = md.load('hps_traj.xtc', top=fileout)
+        self.xyz = traj[-1].xyz
+        mx = np.abs(traj[-1].xyz).max()
+        self.box_size = int(mx*10)
+
+        #Clean up
+        files = glob.glob('*')
+        for file in files:
+            os.remove(file)
+
     def _generate_lmp_input(self):
         if self.hps_pairs is None:
             self.get_hps_pairs()
+        self.lmp_file_dict["t"] = self.t
+        self.lmp_file_dict["dt"] = self.dt
         self.lmp_file_dict["pair_coeff"] = ''.join(self.hps_pairs)
         self.lmp_file_dict["debye"] = round(self.debye_wv*10**-10, 1)
         self.lmp_file_dict["v_seed"] = 494211
@@ -158,19 +204,20 @@ class LMPSetup:
                 if self.residue_dict[key]["id"] == i:
                     masses.append(f'           {i:2d}  {self.residue_dict[key]["mass"]} \n')
 
-        atoms, bonds, coords = [], [], []
+        atoms, bonds = [], []
         k = 1
 
         for chain in range(1, nchains + 1):
-            coords = [-240., -240 + chain * 20, -240]
+            if self.xyz is None:
+                self.xyz = [-240., -240 + chain * 20, -240]
             for aa in self.sequence:
-                coords[0] += definitions.bond_length
+                self.xyz[0] += definitions.bond_length
                 atoms.append(f'       {k :3d}          {chain}    '
                              f'      {self.residue_dict[aa]["id"]:2d}   '
                              f'    {self.residue_dict[aa]["q"]: .2f}'
-                             f'    {coords[0]: .3f}'
-                             f'    {coords[1]: .3f}'
-                             f'    {coords[2]: .3f} \n')
+                             f'    {self.xyz[0]: .3f}'
+                             f'    {self.xyz[1]: .3f}'
+                             f'    {self.xyz[2]: .3f} \n')
                 if k != chain * (len(self.sequence)):
                     bonds.append(f'       {k:3d}       1       {k:3d}       {k + 1:3d}\n')
                 k += 1

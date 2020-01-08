@@ -2,6 +2,8 @@ import numpy as np
 import os
 import definitions
 import glob
+import multiprocessing as mp
+from subprocess import run, PIPE
 import pathlib
 
 
@@ -28,9 +30,12 @@ class LMP:
         dirs.sort()
         return dirs
 
-    def make_initial_frames(self):
+    #TODO REMOVE DUPLICATE IN LMPSETUP
+    def make_initial_frame(self, dirs=None):
         pdb_paths = []
-        for dir in self.lmp_drs:
+        if dirs is None:
+            dirs = self.lmp_drs
+        for dir in dirs:
             lammps2pdb = self.lmp2pdb
             os.system(lammps2pdb + ' ' + dir)
             fileout = dir + '_trj.pdb'
@@ -58,28 +63,13 @@ class LMP:
         data = np.array(data)
         return data
 
-    def get_lmp_temper_data(self):
+    def get_lmp_temper_data(self, lmp_directories=None):
         data = []
         for d in self.lmp_drs:
-            # lmps = glob.glob(os.path.join(d, "log.lammps.*"))
-            # print(lmps)
-            lmps = [
-                '/home/adria/perdiux/prod/lammps/dignon/RE-T-hnRPA/log.lammps.0',
-                '/home/adria/perdiux/prod/lammps/dignon/RE-T-hnRPA/log.lammps.1',
-                '/home/adria/perdiux/prod/lammps/dignon/RE-T-hnRPA/log.lammps.2',
-                '/home/adria/perdiux/prod/lammps/dignon/RE-T-hnRPA/log.lammps.3',
-                '/home/adria/perdiux/prod/lammps/dignon/RE-T-hnRPA/log.lammps.4',
-                '/home/adria/perdiux/prod/lammps/dignon/RE-T-hnRPA/log.lammps.5',
-                '/home/adria/perdiux/prod/lammps/dignon/RE-T-hnRPA/log.lammps.6',
-                '/home/adria/perdiux/prod/lammps/dignon/RE-T-hnRPA/log.lammps.7',
-                '/home/adria/perdiux/prod/lammps/dignon/RE-T-hnRPA/log.lammps.8',
-                '/home/adria/perdiux/prod/lammps/dignon/RE-T-hnRPA/log.lammps.9',
-                '/home/adria/perdiux/prod/lammps/dignon/RE-T-hnRPA/log.lammps.10',
-                '/home/adria/perdiux/prod/lammps/dignon/RE-T-hnRPA/log.lammps.11',
-            ]
-            # TODO ACTUAL SORT
-            print(lmps)
-            # lmps.sort()
+            if lmp_directories is None:
+                lmps = glob.glob(os.path.join(d, "log.lammps.*"))
+            else:
+                lmps = lmp_directories
             for lmp in lmps:
                 log_lmp = open(os.path.join(d, lmp), 'r')
                 lines = log_lmp.readlines()
@@ -151,5 +141,18 @@ class LMP:
             print(
                 "Finding used sequence. Note that Isoleucine and Leucine have the same exact HPS parameters. Therefore, they are not distinguishable.")
             return seq_str
+
+    #TODO REMOVE DUPLICATE IN LMPSETUP
+    def run(self, file, n_cores=1):
+        if n_cores > mp.cpu_count():
+            raise SystemExit(f'Desired number of cores exceed available cores on this machine ({mp.cpu_count()})')
+        if n_cores > 1:
+            command = f'mpirun -np {n_cores} {self.lmp} -in {file}'
+        if n_cores == 1:
+            command = f'{self.lmp} -in {file}'
+        else:
+            raise SystemExit('Invalid core number')
+        out = run(command.split(), stdout=PIPE, stderr=PIPE, universal_newlines=True)
+        return out
 
 # TODO Handle Temperatures or Ionic strengths...
