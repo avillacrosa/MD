@@ -22,8 +22,6 @@ class LMPSetup:
         self.residue_dict = definitions.residues
         self.key_ordering = list(self.residue_dict.keys())
 
-        self.hps_lambdas = None
-        self.hps_sigmas = None
         self.hps_epsilon = 0.2
         self.hps_pairs = None
 
@@ -38,9 +36,9 @@ class LMPSetup:
         missing, pos = [], []
         for key in self.residue_dict:
             if key not in self.sequence:
-                if key != 'L' and key != 'I':
-                    pos.append(self.residue_dict[key]["id"])
-                    missing.append(key)
+                # if key != 'L' and key != 'I':
+                pos.append(self.residue_dict[key]["id"])
+                missing.append(key)
 
         for m in missing:
             del self.residue_dict[m]
@@ -51,6 +49,7 @@ class LMPSetup:
             for key in self.residue_dict:
                 if self.residue_dict[key]["id"] > p:
                     self.residue_dict[key]["id"] += -1
+        self.key_ordering = list(self.residue_dict.keys())
 
     def lammps_ordering(self):
         id = 1
@@ -62,8 +61,6 @@ class LMPSetup:
                 id += 1
         ordered_keys = sorted(self.residue_dict, key=lambda x: (self.residue_dict[x]['id']))
         self.key_ordering = ordered_keys
-        # print(self.residue_dict)
-        # print(ordered_keys, self.key_ordering)
 
     def get_charge_seq(self):
         charged_plus = []
@@ -76,74 +73,76 @@ class LMPSetup:
         return charged_plus, charged_minus
 
     def get_hps_params(self):
-        names = []
-        for i in range(1, len(self.residue_dict) + 1):
-            for key in self.residue_dict:
-                if self.residue_dict[key]["id"] == i:
-                    names.append(self.residue_dict[key]["name"])
-        self.hps_lambdas = [definitions.lambdas[k] for k in names]
-        self.hps_sigmas = [definitions.sigmas[k] for k in names]
+        for key in self.residue_dict:
+            for lam_key in definitions.lambdas:
+                if self.residue_dict[key]["name"] == lam_key:
+                    self.residue_dict[key]["lambda"] = definitions.lambdas[lam_key]
+            for sig_key in definitions.sigmas:
+                if self.residue_dict[key]["name"] == sig_key:
+                    self.residue_dict[key]["sigma"] = definitions.sigmas[sig_key]
 
-    def get_hps_pairs(self, pairs_from_file=False):
+    def get_hps_pairs(self, from_file=None):
         lines = ['pair_coeff          *       *       0.000000   0.000    0.000000   0.000   0.000\n']
-        charged, sorted_residues = [], []
 
-        for res_key in self.key_ordering:
-            if self.residue_dict[res_key]["q"] != 0.:
-                charged.append(self.residue_dict[res_key]["id"])
-            sorted_residues.append(self.residue_dict[res_key])
-
-        # for i,sigm in enumerate(self.hps_sigmas):
-        #     print(i+1,sigm)
-        # print(self.hps_sigmas)
-        # print(10,self.hps_sigmas)
-        # print(11,self.hps_sigmas[11])
-
-        if pairs_from_file:
-            lambdagen = np.genfromtxt(pairs_from_file)
+        if from_file:
+            lambda_gen = np.genfromtxt(from_file)
             count = 0
-
-        print("pre",self.residue_dict)
-        print('\n')
-        # del self.residue_dict["L"]
-        # del sorted_residues[9]
-        # del self.hps_lambdas[9]
-        print("PRE",self.hps_sigmas)
-
-        helper = self.hps_sigmas[9]
-        del self.hps_sigmas[9]
-        self.hps_sigmas.append(self.hps_sigmas[15])
-        self.hps_sigmas[15] = helper
-        helper = self.hps_lambdas[9]
-        del self.hps_lambdas[9]
-        self.hps_lambdas.append(self.hps_lambdas[15])
-        self.hps_lambdas[15] = helper
-
-        print("POST",self.hps_sigmas)
-
-        for i in range(len(self.hps_lambdas)):
-            for j in range(i, len(self.hps_lambdas)):
-                sigmaij = (self.hps_sigmas[i] + self.hps_sigmas[j]) / 2
-                lambdaij = (self.hps_lambdas[i] + self.hps_lambdas[j]) / 2
-                if pairs_from_file:
-                    lambdaij = lambdagen[count]
+        print(len(self.key_ordering))
+        print(self.key_ordering)
+        for i in range(len(self.key_ordering)):
+            for j in range(i, len(self.key_ordering)):
+                res_i = self.residue_dict[self.key_ordering[i]]
+                res_j = self.residue_dict[self.key_ordering[j]]
+                lambda_ij = (res_i["lambda"] + res_j["lambda"])/2
+                sigma_ij = (res_i["sigma"] + res_j["sigma"])/2
+                if from_file:
+                    lambda_ij = lambda_gen[count]
                     count += 1
-                resi, resj = {"id":-1}, {"id":-1}
-                for res in sorted_residues:
-                    if res["id"] == i+1:
-                        resi = res
-                    if res["id"] == j+1:
-                        resj = res
-                if resi["id"] in charged and resj["id"] in charged:
+                if res_i["q"] != 0 and res_j["q"] != 0:
                     cutoff = 35.00
                 else:
                     cutoff = 0.0
                 line = 'pair_coeff         {:2d}      {:2d}       {:.6f}   {:.3f}    {:.6f}  {:6.3f}  {:6.3f}\n'.format(
-                    i + 1, j + 1, self.hps_epsilon, sigmaij, lambdaij, 3 * sigmaij, cutoff)
+                    i + 1, j + 1, self.hps_epsilon, sigma_ij, lambda_ij, 3 * sigma_ij, cutoff)
                 lines.append(line)
+            self.hps_pairs = lines
+
         self.hps_pairs = lines
 
-    def generate_lmp_input(self):
+    def write_hps_files(self, output_dir='default'):
+
+        if output_dir == 'default':
+            output_dir = self.o_wd
+
+        self._generate_lmp_input()
+        self._generate_qsub()
+        self._generate_topo_input()
+
+        topo_temp_file = open('../templates/topo_template.data')
+        topo_template = Template(topo_temp_file.read())
+        topo_subst = topo_template.safe_substitute(self.topo_file_dict)
+
+        lmp_temp_file = open('../templates/input_template.lmp')
+        lmp_template = Template(lmp_temp_file.read())
+        lmp_subst = lmp_template.safe_substitute(self.lmp_file_dict)
+
+        qsub_temp_file = open('../templates/qsub_template.tmp')
+        qsub_template = Template(qsub_temp_file.read())
+        qsub_subst = qsub_template.safe_substitute(self.qsub_file_dict)
+
+        with open(f'../default_output/hps.data', 'tw') as fileout:
+            fileout.write(topo_subst)
+        with open(f'../default_output/{self.job_name}.qsub', 'tw') as fileout:
+            fileout.write(qsub_subst)
+        with open(f'../default_output/hps.lmp', 'tw') as fileout:
+            fileout.write(lmp_subst)
+
+        if output_dir is not None:
+            shutil.copyfile(f'../default_output/hps.data', os.path.join(output_dir, 'data.data'))
+            shutil.copyfile(f'../default_output/{self.job_name}.qsub', os.path.join(output_dir, f'{self.job_name}.qsub'))
+            shutil.copyfile(f'../default_output/hps.lmp', os.path.join(output_dir, 'lmp.lmp'))
+
+    def _generate_lmp_input(self):
         if self.hps_pairs is None:
             self.get_hps_pairs()
         self.lmp_file_dict["pair_coeff"] = ''.join(self.hps_pairs)
@@ -152,15 +151,12 @@ class LMPSetup:
         self.lmp_file_dict["langevin_seed"] = 451618
         self.lmp_file_dict["temp"] = self.temperature
 
-    def generate_topo_input(self, nchains=1):
+    def _generate_topo_input(self, nchains=1):
         masses = []
         for i in range(1, len(self.residue_dict)+1):
             for key in self.residue_dict:
                 if self.residue_dict[key]["id"] == i:
                     masses.append(f'           {i:2d}  {self.residue_dict[key]["mass"]} \n')
-
-        # for i, key in enumerate(self.residue_dict):
-        #     masses.append(f'           {i + 1:2d}  {self.residue_dict[key]["mass"]} \n')
 
         atoms, bonds, coords = [], [], []
         k = 1
@@ -186,36 +182,11 @@ class LMPSetup:
         self.topo_file_dict["atoms"] = ''.join(atoms)
         self.topo_file_dict["bonds"] = ''.join(bonds)
 
-    def generate_qsub(self):
+    def _generate_qsub(self):
         self.qsub_file_dict["work_dir"] = self.p_wd
         self.qsub_file_dict["command"] = f"/home/ramon/local/openmpi/202_gcc630/bin/mpirun -np {self.processors} /home/adria/local/lammps/bin/lmp -in {input}"
         self.qsub_file_dict["np"] = self.processors
         self.qsub_file_dict["jobname"] = self.job_name
-
-    def write_hps_files(self):
-        topo_temp_file = open('../templates/topo_template.data')
-        topo_template = Template(topo_temp_file.read())
-        topo_subst = topo_template.safe_substitute(self.topo_file_dict)
-
-        lmp_temp_file = open('../templates/input_template.lmp')
-        lmp_template = Template(lmp_temp_file.read())
-        lmp_subst = lmp_template.safe_substitute(self.lmp_file_dict)
-
-        qsub_temp_file = open('../templates/qsub_template.tmp')
-        qsub_template = Template(qsub_temp_file.read())
-        qsub_subst = qsub_template.safe_substitute(self.qsub_file_dict)
-
-
-        with open(f'../default_output/hps.data', 'tw') as fileout:
-            fileout.write(topo_subst)
-        with open(f'../default_output/{self.job_name}.qsub', 'tw') as fileout:
-            fileout.write(qsub_subst)
-        with open(f'../default_output/hps.lmp', 'tw') as fileout:
-            fileout.write(lmp_subst)
-
-        shutil.copyfile(f'../default_output/hps.data', os.path.join(self.o_wd, 'data.data'))
-        shutil.copyfile(f'../default_output/{self.job_name}.qsub', os.path.join(self.o_wd, f'{self.job_name}.qsub'))
-        shutil.copyfile(f'../default_output/hps.lmp', os.path.join(self.o_wd, 'lmp.lmp'))
 
     def debye_length(self):
         kappa = 1 / (np.sqrt(2 * self.ionic_strength * 10 ** 3 * cnt.Avogadro / (cnt.epsilon_0 * 80 * cnt.Boltzmann * self.temperature)) * cnt.e)
