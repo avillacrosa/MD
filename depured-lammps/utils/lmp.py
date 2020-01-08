@@ -38,6 +38,7 @@ class LMP:
         for dir in dirs:
             lammps2pdb = self.lmp2pdb
             os.system(lammps2pdb + ' ' + dir)
+            # TODO CORRECT ERROR HERE
             fileout = dir + '_trj.pdb'
             pdb_paths.append(fileout)
         return pdb_paths

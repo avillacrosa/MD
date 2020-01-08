@@ -5,7 +5,35 @@ import numpy as np
 import os
 import time
 import datetime
+import multiprocessing as mp
+import glob
 from numba import jit
+
+mpi_results = []
+
+
+@jit(nopython=True)
+def jit_contact_calc(natoms, positions):
+    dij = np.zeros(shape=(natoms, natoms))
+    for i in range(natoms):
+        for j in range(natoms):
+            d = 0
+            for r in range(3):
+                d += (positions[0, i, r] - positions[0, j, r]) ** 2
+            dij[i, j] = math.sqrt(d)
+    return dij
+
+
+def mpi_contact_calc(natoms, positions):
+    dij = np.zeros(shape=(natoms, natoms))
+    for i in range(natoms):
+        for j in range(natoms):
+            d = 0
+            for r in range(3):
+                d += (positions[0, i, r] - positions[0, j, r]) ** 2
+            dij[i, j] = math.sqrt(d)
+    # print(dij.shape)
+    return dij
 
 
 class Analysis(lmp.LMP):
@@ -14,32 +42,38 @@ class Analysis(lmp.LMP):
         self.equilibration = equil
         super(Analysis, self).__init__(**kw)
 
-    def contact_map(self):
-        pdbs = self.make_initial_frames()
-        topo = pdbs[0]
+    def contact_map(self, use_jit=False):
+        # TODO ERROR HERE....
+        # pdbs = self.make_initial_frame()
+        # topo = pdbs[0]
+        topo = '/home/adria/perdiux/prod/lammps/dignon/I_cpeb4/0.051/hps_trj.pdb'
 
-
-
-        @jit(nopython=True)
-        def contact_calc(natoms, positions):
-            dij = np.zeros(shape=(natoms, natoms))
-            for i in range(natoms):
-                for j in range(natoms):
-                    d = 0
-                    for r in range(3):
-                        d += (positions[0, i, r] - positions[0, j, r]) ** 2
-                    dij[i, j] = math.sqrt(d)
-            return dij
-
-        traj = md.load(traj_path, top=topo)
-        traj = traj[2000:5000]
-        dframe = []
-        for frame in range(traj.n_frames):
-            tframe = traj[frame]
-            dijf = contact_calc(tframe.n_atoms, tframe.xyz)
-            dframe.append(dijf)
-        dframe = np.array(dframe)
-        contact_map = dframe.mean(0) * 10
+        xtcs = glob.glob(os.path.join(self.o_wd, '*xtc'))
+        xtc = xtcs[0]
+        traj = md.load(xtc, top=topo)
+        #TODO TEST FIRST PART OF IF
+        if use_jit:
+            dframe = []
+            for frame in range(traj.n_frames):
+                tframe = traj[frame]
+                dijf = jit_contact_calc(tframe.n_atoms, tframe.xyz)
+                dframe.append(dijf)
+                dframe = np.array(dframe)
+            contact_map = dframe.mean(0)
+        else:
+            pool = mp.Pool()
+            print("RESULTS", len(mpi_results))
+            ranges = np.linspace(0, traj.n_frames, mp.cpu_count() + 1, dtype='int')
+            count = 0
+            for i in range(1, len(ranges)):
+                count += 1
+                tframed = traj[ranges[i-1]:ranges[i]]
+                pool.apply_async(mpi_contact_calc,args=(tframed.n_atoms, tframed.xyz),callback=lambda x: mpi_results.append(x))
+            pool.close()
+            pool.join()
+            result = mpi_results
+            contact_map = np.mean(result, axis=0)
+        contact_map = contact_map * 10
         self.contacts = contact_map
         return contact_map
 
@@ -99,3 +133,8 @@ class Analysis(lmp.LMP):
 
     def flory_scaling(x, flory, r0):
         return r0 * (x ** flory)
+
+
+ana_dir = '/home/adria/perdiux/prod/lammps/dignon/I_cpeb4/0.051'
+analyzer = Analysis(oliba_wd=ana_dir)
+analyzer.contact_map(use_jit=False)
