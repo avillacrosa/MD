@@ -24,6 +24,7 @@ xtc = '/home/adria/perdiux/prod/lammps/dignon/cpeb4d4/A-syn_HPS_100000_frames.at
 nrg = '/home/adria/perdiux/prod/lammps/dignon/cpeb4d4/obs.data'
 
 #STUPID CHANGE FOR COMMIT
+#STUPID CHANGE FOR COMMIT2
 
 def plot_rgs(dir, equil=4000000):
     rg_frame, Is = calc.rg_from_lmp(dir, equil)
