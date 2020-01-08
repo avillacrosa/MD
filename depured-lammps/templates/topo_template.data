@@ -6,9 +6,9 @@
           $atom_types   atom types
            1   bond types
  
-  -250.000000       250.000000        xlo xhi
-  -250.000000       250.000000        ylo yhi
-  -250.000000       250.000000        zlo zhi
+  -2500.000000       2500.000000        xlo xhi
+  -2500.000000       2500.000000        ylo yhi
+  -2500.000000       2500.000000        zlo zhi
  
  Masses
 

@@ -9,7 +9,7 @@ bond_style  harmonic
 pair_style  ljlambda $debye 0.0 35.0
 dielectric  80.0
 
-read_data   data.data
+read_data   hps.data
 
 # pairwise coefficients
 
@@ -22,7 +22,7 @@ neighbor  3.5 multi
 neigh_modify  every 10 delay 0
 
 comm_style    tiled
-timestep      10.0
+timestep      $dt
 
 velocity      all create $temp $v_seed
 fix           fxnve  all nve
@@ -34,7 +34,7 @@ thermo        10000
 thermo_style  custom step pe ke temp c_rg
 thermo_modify flush yes
 
-#dump          VMD1 all xtc 10000 hps_traj.xtc
-#dump_modify   VMD1 unwrap yes
+dump          VMD1 all xtc 10000 hps_traj.xtc
+dump_modify   VMD1 unwrap yes
 #dump          new_dump all atom 10000 hps_traj.atom
-run           100000
+run           $t
