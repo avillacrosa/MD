@@ -1,4 +1,5 @@
 import definitions
+import lmp
 import scipy.constants as cnt
 import numpy as np
 import multiprocessing as mp
@@ -10,10 +11,10 @@ import mdtraj as md
 from string import Template
 
 
-class LMPSetup:
-    def __init__(self, out_dir, seq):
-        self.o_wd = out_dir
-        self.p_wd = self.o_wd.replace('/oliba', '')
+class LMPSetup(lmp.LMP):
+    def __init__(self, seq, **kw):
+        super(LMPSetup, self).__init__(**kw)
+        self.p_wd = self.oliba_wd.replace('/oliba', '')
         self.sequence = seq
 
         self.temperature = 300
@@ -29,6 +30,7 @@ class LMPSetup:
 
         self.lmp = '/home/adria/local/lammps/bin/lmp'
         self.box_size = 2500
+        self.hps_scale = 1.0
 
         self.hps_epsilon = 0.2
         self.hps_pairs = None
@@ -37,14 +39,20 @@ class LMPSetup:
         self.lmp_file_dict = {}
         self.qsub_file_dict = {}
 
+        self.v_seed = 494211
+        self.langevin_seed = 451618
+        self.save = 50000
+
         self.job_name = 'hps'
         self.processors = 8
+        # self.temperatures = np.linspace(150.0, 600.0, self.processors)
+        self.temperatures = '150.0 170.0 192.5 217.5 247.5 280.0 320.0 362.5 410.0 467.5 530.0 600.0'
+        self.swap_every = 1000
 
     def del_missing_aas(self):
         missing, pos = [], []
         for key in self.residue_dict:
             if key not in self.sequence:
-                # if key != 'L' and key != 'I':
                 pos.append(self.residue_dict[key]["id"])
                 missing.append(key)
 
@@ -108,15 +116,15 @@ class LMPSetup:
                     cutoff = 35.00
                 else:
                     cutoff = 0.0
+                lambda_ij = lambda_ij * self.hps_scale
                 line = 'pair_coeff         {:2d}      {:2d}       {:.6f}   {:.3f}    {:.6f}  {:6.3f}  {:6.3f}\n'.format(
                     i + 1, j + 1, self.hps_epsilon, sigma_ij, lambda_ij, 3 * sigma_ij, cutoff)
                 lines.append(line)
         self.hps_pairs = lines
 
     def write_hps_files(self, output_dir='default'):
-
         if output_dir == 'default':
-            output_dir = self.o_wd
+            output_dir = self.oliba_wd
 
         self._generate_lmp_input()
         self._generate_qsub()
@@ -126,7 +134,10 @@ class LMPSetup:
         topo_template = Template(topo_temp_file.read())
         topo_subst = topo_template.safe_substitute(self.topo_file_dict)
 
-        lmp_temp_file = open('../templates/general/input_template.lmp')
+        if self.temper:
+            lmp_temp_file = open('../templates/replica/input_template.lmp')
+        else:
+            lmp_temp_file = open('../templates/general/input_template.lmp')
         lmp_template = Template(lmp_temp_file.read())
         lmp_subst = lmp_template.safe_substitute(self.lmp_file_dict)
 
@@ -134,56 +145,38 @@ class LMPSetup:
         qsub_template = Template(qsub_temp_file.read())
         qsub_subst = qsub_template.safe_substitute(self.qsub_file_dict)
 
-        with open(f'../default_output/hps.data', 'tw') as fileout:
+        with open(f'../default_output/data.data', 'tw') as fileout:
             fileout.write(topo_subst)
         with open(f'../default_output/{self.job_name}.qsub', 'tw') as fileout:
             fileout.write(qsub_subst)
-        with open(f'../default_output/hps.lmp', 'tw') as fileout:
+        with open(f'../default_output/lmp.lmp', 'tw') as fileout:
             fileout.write(lmp_subst)
 
         if output_dir is not None:
-            shutil.copyfile(f'../default_output/hps.data', os.path.join(output_dir, 'data.data'))
+            shutil.copyfile(f'../default_output/data.data', os.path.join(output_dir, 'data.data'))
             shutil.copyfile(f'../default_output/{self.job_name}.qsub', os.path.join(output_dir, f'{self.job_name}.qsub'))
-            shutil.copyfile(f'../default_output/hps.lmp', os.path.join(output_dir, 'lmp.lmp'))
+            shutil.copyfile(f'../default_output/lmp.lmp', os.path.join(output_dir, 'lmp.lmp'))
 
-    def run(self, file, n_cores=1):
-        if n_cores > mp.cpu_count():
-            raise SystemExit(f'Desired number of cores exceed available cores on this machine ({mp.cpu_count()})')
-        if n_cores > 1:
-            command = f'mpirun -n {n_cores} {self.lmp} -in {file}'
-        elif n_cores == 1:
-            command = f'{self.lmp} -in {file}'
-        else:
-            raise SystemExit('Invalid core number')
-        old_wd = os.getcwd()
-        os.chdir(self.o_wd)
-        out = run(command.split(), stdout=PIPE, stderr=PIPE, universal_newlines=True)
-        os.chdir(old_wd)
-        return out
-
-    def get_equilibration_pdb(self):
-
+    def get_equilibration_xyz(self):
         lmp2pdb = '/home/adria/perdiux/src/lammps-7Aug19/tools/ch2lmp/lammps2pdb.pl'
-
-        meta_maker = LMPSetup(self.o_wd, self.sequence)
-        meta_maker.t = 1000
+        meta_maker = LMPSetup(oliba_wd='../default_output', seq=self.sequence)
+        meta_maker.t = 100000
         meta_maker.del_missing_aas()
         meta_maker.get_hps_params()
         meta_maker.get_hps_pairs()
         meta_maker.write_hps_files(output_dir=None)
-        os.chdir('/home/adria/scripts/depured-lammps/default_output')
-        self.run('hps.lmp', n_cores=1)
+        meta_maker.run('lmp.lmp', n_cores=8)
 
-        file = '../default_output/hps'
+        os.chdir('/home/adria/scripts/depured-lammps/default_output')
+        file = '../default_output/data'
         os.system(lmp2pdb + ' ' + file)
         fileout = file + '_trj.pdb'
 
         traj = md.load('hps_traj.xtc', top=fileout)
-        self.xyz = traj[-1].xyz
-        mx = np.abs(traj[-1].xyz).max()
-        self.box_size = int(mx*10)
+        self.xyz = traj[-1].xyz*10
+        mx = np.abs(self.xyz).max()
+        self.box_size = int(mx*3)
 
-        #Clean up
         files = glob.glob('*')
         for file in files:
             os.remove(file)
@@ -199,9 +192,14 @@ class LMPSetup:
         self.lmp_file_dict["dt"] = self.dt
         self.lmp_file_dict["pair_coeff"] = ''.join(self.hps_pairs)
         self.lmp_file_dict["debye"] = round(self.debye_wv*10**-10, 1)
-        self.lmp_file_dict["v_seed"] = 494211
-        self.lmp_file_dict["langevin_seed"] = 451618
+        self.lmp_file_dict["v_seed"] = self.v_seed
+        self.lmp_file_dict["langevin_seed"] = self.langevin_seed
         self.lmp_file_dict["temp"] = self.temperature
+        self.lmp_file_dict["temperatures"] = self.temperatures
+        self.lmp_file_dict["swap_every"] = self.swap_every
+        self.lmp_file_dict["save"] = self.save
+        # TODO this sucks but it is what it is
+        self.lmp_file_dict["replicas"] = np.array2string(np.linspace(0, self.processors-1, self.processors, dtype='int'))[1:-1]
 
     def _generate_topo_input(self, nchains=1):
         masses = []
@@ -223,7 +221,7 @@ class LMPSetup:
                     xyz[0] += definitions.bond_length
                 else:
                     xyz = self.xyz[0, k-1, :]
-                atoms.append(f'       {k :3d}          {chain}    '
+                atoms.append(f'      {k :3d}          {chain}    '
                              f'      {self.residue_dict[aa]["id"]:2d}   '
                              f'    {self.residue_dict[aa]["q"]: .2f}'
                              f'    {xyz[0]: .3f}'
@@ -239,10 +237,14 @@ class LMPSetup:
         self.topo_file_dict["masses"] = ''.join(masses)
         self.topo_file_dict["atoms"] = ''.join(atoms)
         self.topo_file_dict["bonds"] = ''.join(bonds)
+        self.topo_file_dict["box_size"] = self.box_size
 
     def _generate_qsub(self):
         self.qsub_file_dict["work_dir"] = self.p_wd
-        self.qsub_file_dict["command"] = f"/home/ramon/local/openmpi/202_gcc630/bin/mpirun -np {self.processors} /home/adria/local/lammps/bin/lmp -in {input}"
+        if self.temper:
+            self.qsub_file_dict["command"] = f"/home/ramon/local/openmpi/202_gcc630/bin/mpirun -np {self.processors} /home/adria/local/lammps/bin/lmp -partition {self.processors}x1 -in lmp.lmp"
+        else:
+            self.qsub_file_dict["command"] = f"/home/ramon/local/openmpi/202_gcc630/bin/mpirun -np {self.processors} /home/adria/local/lammps/bin/lmp -in lmp.lmp"
         self.qsub_file_dict["np"] = self.processors
         self.qsub_file_dict["jobname"] = self.job_name
 
@@ -260,6 +262,3 @@ class LMPSetup:
                         kappa * kappa * cnt.e * cnt.e * 2 * 10 ** 3 * cnt.Avogadro)
             Is.append(I)
         return Is
-
-    def set_sequence(self, seq):
-        self.sequence = seq

@@ -12,16 +12,19 @@ class LMP:
         self.sequence = None
         self.res_dict = definitions.residues
 
+        self.temper = temper
+
         self.o_wd = oliba_wd
         self.p_wd = oliba_wd.replace('/perdiux', '')
 
         self.lmp = '/home/adria/local/lammps/bin/lmp'
         self.lmp_drs = self.get_lmp_dirs()
         self.n_drs = len(self.lmp_drs)
-        if temper:
-            self.data = self.get_lmp_temper_data()
-        else:
-            self.data = self.get_lmp_data()
+        # if temper:
+        #     self.data = self.get_lmp_temper_data()
+        # else:
+        # self.data = self.get_lmp_data()
+        self.data = None
         self.lmp2pdb = '/home/adria/perdiux/src/lammps-7Aug19/tools/ch2lmp/lammps2pdb.pl'
 
     def get_lmp_dirs(self):
@@ -31,16 +34,17 @@ class LMP:
         dirs.sort()
         return dirs
 
-    #TODO REMOVE DUPLICATE IN LMPSETUP
     def make_initial_frame(self, dirs=None):
         pdb_paths = []
         if dirs is None:
             dirs = self.lmp_drs
         for dir in dirs:
+            files = glob.glob(os.path.join(dir, '*.data'))
+            file = os.path.basename(files[0])
+            file = file.replace('.data', '')
             lammps2pdb = self.lmp2pdb
-            os.system(lammps2pdb + ' ' + dir)
-            # TODO CORRECT ERROR HERE
-            fileout = dir + '_trj.pdb'
+            os.system(lammps2pdb + ' ' + os.path.join(dir, file))
+            fileout = os.path.join(dir, file) + '_trj.pdb'
             pdb_paths.append(fileout)
         return pdb_paths
 
@@ -144,7 +148,6 @@ class LMP:
                 "Finding used sequence. Note that Isoleucine and Leucine have the same exact HPS parameters. Therefore, they are not distinguishable.")
             return seq_str
 
-    #TODO REMOVE DUPLICATE IN LMPSETUP
     def run(self, file, n_cores=1):
         f_name = os.path.join(self.o_wd, file)
         if n_cores > mp.cpu_count():

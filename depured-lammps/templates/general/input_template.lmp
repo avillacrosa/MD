@@ -26,16 +26,16 @@ timestep      $dt
 
 velocity      all create $temp $v_seed
 fix           fxnve  all nve
-fix           fxlange all langevin $temp $temp 10000 $langevin_seed
+fix           fxlange all langevin $temp $temp $save $langevin_seed
 
 #compute rg all gyration
 
-thermo        10000
+thermo        $save
 #thermo_style  custom step pe ke temp c_rg
 thermo_style  custom step pe ke temp
 thermo_modify flush yes
 
-dump          VMD1 all xtc 10000 hps_traj.xtc
+dump          VMD1 all xtc $save hps_traj.xtc
 dump_modify   VMD1 unwrap yes
-#dump          new_dump all atom 10000 hps_traj.atom
+#dump          new_dump all atom $save hps_traj.atom
 run           $t

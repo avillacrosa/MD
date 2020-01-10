@@ -7,9 +7,16 @@ import time
 import datetime
 import multiprocessing as mp
 import glob
+from scipy.stats import gaussian_kde
+from sklearn.neighbors import KernelDensity
+import statsmodels.api as sm
 from numba import jit
 
 mpi_results = []
+
+
+def flory_scaling(x, flory, r0):
+    return r0 * (x ** flory)
 
 
 @jit(nopython=True)
@@ -37,19 +44,18 @@ def mpi_contact_calc(natoms, positions):
 
 
 class Analysis(lmp.LMP):
-    def __init__(self, equil=3e6, **kw):
+    def __init__(self, **kw):
         self.contacts = None
-        self.equilibration = equil
+        self.equilibration = 3e6
         super(Analysis, self).__init__(**kw)
 
     def contact_map(self, use_jit=False):
-        # TODO ERROR HERE....
-        # pdbs = self.make_initial_frame()
-        # topo = pdbs[0]
-        topo = '/home/adria/perdiux/prod/lammps/dignon/I_cpeb4/0.051/hps_trj.pdb'
+        pdbs = self.make_initial_frame()
+        topo = pdbs[0]
 
         xtcs = glob.glob(os.path.join(self.o_wd, '*xtc'))
         xtc = xtcs[0]
+        print(xtc, topo)
         traj = md.load(xtc, top=topo)
         #TODO TEST FIRST PART OF IF
         if use_jit:
@@ -62,13 +68,12 @@ class Analysis(lmp.LMP):
             contact_map = dframe.mean(0)
         else:
             pool = mp.Pool()
-            print("RESULTS", len(mpi_results))
             ranges = np.linspace(0, traj.n_frames, mp.cpu_count() + 1, dtype='int')
             count = 0
             for i in range(1, len(ranges)):
                 count += 1
                 tframed = traj[ranges[i-1]:ranges[i]]
-                pool.apply_async(mpi_contact_calc,args=(tframed.n_atoms, tframed.xyz),callback=lambda x: mpi_results.append(x))
+                pool.apply_async(mpi_contact_calc,args=(tframed.n_atoms, tframed.xyz) ,callback=lambda x: mpi_results.append(x))
             pool.close()
             pool.join()
             result = mpi_results
@@ -79,8 +84,7 @@ class Analysis(lmp.LMP):
 
     def contact_map_by_residue(self):
         contacts = self.contacts
-        dict_res_translator = {'A': 0, 'R': 1, 'N': 2, 'D': 3, 'C': 4, 'E': 5, 'Q': 6, 'G': 7, 'H': 8, 'I': 9,
-                               'L': 10,
+        dict_res_translator = {'A': 0, 'R': 1, 'N': 2, 'D': 3, 'C': 4, 'E': 5, 'Q': 6, 'G': 7, 'H': 8, 'I': 9, 'L': 10,
                                'K': 11, 'M': 12, 'F': 13, 'P': 14, 'S': 15, 'T': 16, 'W': 17, 'Y': 18, 'V': 19}
         saver = np.zeros(shape=(20, 20))
         dicti = {}
@@ -110,7 +114,7 @@ class Analysis(lmp.LMP):
         return ijs, means
 
     def rg_from_lmp(self):
-        data = self.get_lmp_data(dir)
+        data = self.get_lmp_data()
         rgs = []
         for run in range(data.shape[0]):
             rg_frame = data[run, data[run, :, 0] > self.equilibration, 4]
@@ -131,5 +135,20 @@ class Analysis(lmp.LMP):
         print(f'Time expended : {datetime.timedelta(seconds=time.time() - ti)}')
         return rgs
 
-    def flory_scaling(x, flory, r0):
-        return r0 * (x ** flory)
+    def get_rg_distribution(self, scikit=False):
+        rgs = self.rg_from_lmp()
+        rgs = rgs[0]
+        kde_scipy = gaussian_kde(rgs)
+        kde_scikit = KernelDensity(kernel='gaussian').fit(rgs[:, np.newaxis])
+
+        x = np.linspace(20, 40, 1000)
+        xscikit = np.linspace(20, 40, rgs.shape[0])[:, np.newaxis]
+        if scikit:
+            return kde_scikit, xscikit
+        return kde_scipy, x
+
+    def get_rg_acf(self):
+        rgs = self.rg_from_lmp()
+        rgs = rgs[0][0]
+        acf = sm.tsa.stattools.acf(rgs, nlags=1000)
+        return rgs, acf

@@ -1,0 +1,40 @@
+units       real
+dimension   3
+boundary    p p p
+atom_style  full
+
+bond_style  harmonic
+pair_style  ljlambda 0.1 0.0 35.0
+dielectric  80.0
+
+read_data   data.data
+
+bond_coeff          1     9.600     3.8
+
+$pair_coeff
+
+special_bonds fene
+neighbor  3.5 multi
+neigh_modify  every 10 delay 0
+
+comm_style    tiled
+timestep      $dt
+
+variable T world $temperatures
+variable r world $replicas
+
+
+velocity      all create $T $v_seed
+fix           fxnve  all nve
+fix           fxlange all langevin $T $T 10000 $langevin_seed
+
+compute rg all gyration
+
+thermo        $save
+thermo_style  custom step pe ke temp c_rg
+thermo_modify flush yes
+
+dump xtcdump  all xtc $save xtc_temper.$r
+dump_modify   xtcdump unwrap yes
+
+temper  $t  $swap_every  $T fxlange $v_seed $langevin_seed
