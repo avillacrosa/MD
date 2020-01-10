@@ -133,8 +133,3 @@ class Analysis(lmp.LMP):
 
     def flory_scaling(x, flory, r0):
         return r0 * (x ** flory)
-
-
-ana_dir = '/home/adria/perdiux/prod/lammps/dignon/I_cpeb4/0.051'
-analyzer = Analysis(oliba_wd=ana_dir)
-analyzer.contact_map(use_jit=False)

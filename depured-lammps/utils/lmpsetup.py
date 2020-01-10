@@ -155,8 +155,10 @@ class LMPSetup:
             command = f'{self.lmp} -in {file}'
         else:
             raise SystemExit('Invalid core number')
+        old_wd = os.getcwd()
+        os.chdir(self.o_wd)
         out = run(command.split(), stdout=PIPE, stderr=PIPE, universal_newlines=True)
-        print(out)
+        os.chdir(old_wd)
         return out
 
     def get_equilibration_pdb(self):
@@ -186,6 +188,10 @@ class LMPSetup:
         for file in files:
             os.remove(file)
 
+    def get_pdb_xyz(self, pdb):
+        struct = md.load_pdb(pdb)
+        self.xyz = struct.xyz*10
+
     def _generate_lmp_input(self):
         if self.hps_pairs is None:
             self.get_hps_pairs()
@@ -206,18 +212,23 @@ class LMPSetup:
 
         atoms, bonds = [], []
         k = 1
+        spaghetti = False
 
         for chain in range(1, nchains + 1):
             if self.xyz is None:
-                self.xyz = [-240., -240 + chain * 20, -240]
+                xyz = [-240., -240 + chain * 20, -240]
+                spaghetti = True
             for aa in self.sequence:
-                self.xyz[0] += definitions.bond_length
+                if spaghetti:
+                    xyz[0] += definitions.bond_length
+                else:
+                    xyz = self.xyz[0, k-1, :]
                 atoms.append(f'       {k :3d}          {chain}    '
                              f'      {self.residue_dict[aa]["id"]:2d}   '
                              f'    {self.residue_dict[aa]["q"]: .2f}'
-                             f'    {self.xyz[0]: .3f}'
-                             f'    {self.xyz[1]: .3f}'
-                             f'    {self.xyz[2]: .3f} \n')
+                             f'    {xyz[0]: .3f}'
+                             f'    {xyz[1]: .3f}'
+                             f'    {xyz[2]: .3f} \n')
                 if k != chain * (len(self.sequence)):
                     bonds.append(f'       {k:3d}       1       {k:3d}       {k + 1:3d}\n')
                 k += 1

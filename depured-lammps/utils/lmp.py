@@ -15,6 +15,7 @@ class LMP:
         self.o_wd = oliba_wd
         self.p_wd = oliba_wd.replace('/perdiux', '')
 
+        self.lmp = '/home/adria/local/lammps/bin/lmp'
         self.lmp_drs = self.get_lmp_dirs()
         self.n_drs = len(self.lmp_drs)
         if temper:
@@ -145,15 +146,19 @@ class LMP:
 
     #TODO REMOVE DUPLICATE IN LMPSETUP
     def run(self, file, n_cores=1):
+        f_name = os.path.join(self.o_wd, file)
         if n_cores > mp.cpu_count():
             raise SystemExit(f'Desired number of cores exceed available cores on this machine ({mp.cpu_count()})')
         if n_cores > 1:
-            command = f'mpirun -np {n_cores} {self.lmp} -in {file}'
-        if n_cores == 1:
-            command = f'{self.lmp} -in {file}'
+            command = f'mpirun -n {n_cores} {self.lmp} -in {f_name}'
+        elif n_cores == 1:
+            command = f'{self.lmp} -in {f_name}'
         else:
             raise SystemExit('Invalid core number')
+        old_wd = os.getcwd()
+        os.chdir(self.o_wd)
         out = run(command.split(), stdout=PIPE, stderr=PIPE, universal_newlines=True)
+        os.chdir(old_wd)
         return out
 
 # TODO Handle Temperatures or Ionic strengths...

@@ -9,7 +9,7 @@ bond_style  harmonic
 pair_style  ljlambda $debye 0.0 35.0
 dielectric  80.0
 
-read_data   hps.data
+read_data   data.data
 
 # pairwise coefficients
 
@@ -28,10 +28,11 @@ velocity      all create $temp $v_seed
 fix           fxnve  all nve
 fix           fxlange all langevin $temp $temp 10000 $langevin_seed
 
-compute rg all gyration
+#compute rg all gyration
 
 thermo        10000
-thermo_style  custom step pe ke temp c_rg
+#thermo_style  custom step pe ke temp c_rg
+thermo_style  custom step pe ke temp
 thermo_modify flush yes
 
 dump          VMD1 all xtc 10000 hps_traj.xtc
