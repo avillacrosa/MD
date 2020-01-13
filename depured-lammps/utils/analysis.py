@@ -3,20 +3,30 @@ import mdtraj as md
 import math
 import numpy as np
 import os
+import re
 import time
 import datetime
 import multiprocessing as mp
 import glob
+from scipy.optimize import curve_fit
 from scipy.stats import gaussian_kde
 from sklearn.neighbors import KernelDensity
 import statsmodels.api as sm
+from pathlib import Path
+
 from numba import jit
 
 mpi_results = []
 
 
-def flory_scaling(x, flory, r0):
+def full_flory_scaling(x, flory, r0):
     return r0 * (x ** flory)
+
+
+def flory_scaling(r0):
+    def flory(x, flory):
+        return r0 * (x ** flory)
+    return flory
 
 
 @jit(nopython=True)
@@ -39,7 +49,6 @@ def mpi_contact_calc(natoms, positions):
             for r in range(3):
                 d += (positions[0, i, r] - positions[0, j, r]) ** 2
             dij[i, j] = math.sqrt(d)
-    # print(dij.shape)
     return dij
 
 
@@ -52,35 +61,78 @@ class Analysis(lmp.LMP):
     def contact_map(self, use_jit=False):
         pdbs = self.make_initial_frame()
         topo = pdbs[0]
-
-        xtcs = glob.glob(os.path.join(self.o_wd, '*xtc'))
-        xtc = xtcs[0]
-        print(xtc, topo)
-        traj = md.load(xtc, top=topo)
-        #TODO TEST FIRST PART OF IF
-        if use_jit:
-            dframe = []
-            for frame in range(traj.n_frames):
-                tframe = traj[frame]
-                dijf = jit_contact_calc(tframe.n_atoms, tframe.xyz)
-                dframe.append(dijf)
-                dframe = np.array(dframe)
-            contact_map = dframe.mean(0)
+        if self.temper:
+            xtcs = glob.glob(os.path.join(self.o_wd, '*.xtc*'))
         else:
-            pool = mp.Pool()
-            ranges = np.linspace(0, traj.n_frames, mp.cpu_count() + 1, dtype='int')
-            count = 0
-            for i in range(1, len(ranges)):
-                count += 1
-                tframed = traj[ranges[i-1]:ranges[i]]
-                pool.apply_async(mpi_contact_calc,args=(tframed.n_atoms, tframed.xyz) ,callback=lambda x: mpi_results.append(x))
-            pool.close()
-            pool.join()
-            result = mpi_results
-            contact_map = np.mean(result, axis=0)
-        contact_map = contact_map * 10
-        self.contacts = contact_map
-        return contact_map
+            xtcs = []
+            for xtc in Path(self.o_wd).rglob('*.xtc'):
+                xtcs.append(os.fspath(xtc))
+        contact_maps = []
+        if self.temper:
+            xtcs = sorted(xtcs, key=lambda x: int(re.findall(r'\d+', os.path.basename(x))[0]))
+        else:
+            xtcs = sorted(xtcs)
+        for xtc in xtcs:
+            traj = md.load(xtc, top=topo)
+            #TODO TEST FIRST PART OF IF
+            if use_jit:
+                dframe = []
+                for frame in range(traj.n_frames):
+                    tframe = traj[frame]
+                    dijf = jit_contact_calc(tframe.n_atoms, tframe.xyz)
+                    dframe.append(dijf)
+                    dframe = np.array(dframe)
+                contact_map = dframe.mean(0)
+            else:
+                pool = mp.Pool()
+                ranges = np.linspace(0, traj.n_frames, mp.cpu_count() + 1, dtype='int')
+                count = 0
+                for i in range(1, len(ranges)):
+                    count += 1
+                    tframed = traj[ranges[i-1]:ranges[i]]
+                    pool.apply_async(mpi_contact_calc,args=(tframed.n_atoms, tframed.xyz) ,callback=lambda x: mpi_results.append(x))
+                pool.close()
+                pool.join()
+                result = mpi_results
+                contact_map = np.mean(result, axis=0)
+            contact_map = contact_map * 10
+            contact_maps.append(contact_map)
+        self.contacts = np.array(contact_maps)
+        return contact_maps
+
+    def flory_scaling_fit(self, r0=None):
+        tot_ijs, tot_means = self.ij_from_contacts()
+        florys, r0s = [], []
+        for i, ij in enumerate(tot_ijs):
+            mean = tot_means[i]
+            if r0 is None:
+                fit, fitv = curve_fit(full_flory_scaling, ij, mean)
+                fit_flory = fit[0]
+                fit_r0 = fit[1]
+            else:
+                fit, fitv = curve_fit(flory_scaling(r0), ij, mean)
+                fit_flory = fit[0]
+                fit_r0 = r0
+            florys.append(fit_flory)
+            r0s.append(fit_r0)
+        return np.array(florys), np.array(r0s)
+
+    def ij_from_contacts(self):
+        if self.contacts is None:
+            self.contact_map()
+        tot_means = []
+        tot_ijs = []
+        for contact in self.contacts:
+            ijs = []
+            means = []
+            for d in range(contact.shape[0]):
+                a = np.diagonal(contact, offset=int(d))
+                means.append(a.mean())
+                ijs.append(d)
+            tot_ijs.append(ijs)
+            tot_means.append(means)
+        return np.array(tot_ijs), np.array(tot_means)
+        # return ijs, means
 
     def contact_map_by_residue(self):
         contacts = self.contacts
@@ -102,38 +154,27 @@ class Analysis(lmp.LMP):
 
         return saver, dict_res_translator
 
-    def ij_from_contacts(self):
-        if self.contacts is None:
-            self.contact_map()
-        means = []
-        ijs = []
-        for d in range(self.contacts.shape[0]):
-            a = np.diagonal(self.contacts, offset=int(d))
-            means.append(a.mean())
-            ijs.append(d)
-        return ijs, means
-
-    def rg_from_lmp(self):
-        data = self.get_lmp_data()
+    def rg(self, calc_from='lmp'):
+        if self.temper:
+            data = self.get_lmp_temper_data()
+        else:
+            data = self.get_lmp_data()
         rgs = []
-        for run in range(data.shape[0]):
-            rg_frame = data[run, data[run, :, 0] > self.equilibration, 4]
-            rgs.append(rg_frame)
-        return rgs
-
-    def rg_from_mdtraj(self):
-        rgs, tloads = [], []
-        ti = time.time()
-        self.make_initial_frames()
-        for dir in self.lmp_drs:
-            traj = os.path.join(dir, 'hps_traj.xtc')
-            topo = os.path.join(os.path.dirname(traj), 'hps_trj.pdb')
-            tload = md.load(traj, top=topo)
-            rg = md.compute_rg(tload)
-            rgs.append(rg)
-            tloads.append(tload)
-        print(f'Time expended : {datetime.timedelta(seconds=time.time() - ti)}')
-        return rgs
+        if calc_from == 'lmp':
+            for run in range(data.shape[0]):
+                rg_frame = data[run, data[run, :, 0] > self.equilibration, 4]
+                rgs.append(rg_frame)
+        if calc_from == 'mdtraj':
+            tloads = []
+            self.make_initial_frames()
+            for dir in self.lmp_drs:
+                traj = os.path.join(dir, 'hps_traj.xtc')
+                topo = os.path.join(os.path.dirname(traj), 'hps_trj.pdb')
+                tload = md.load(traj, top=topo)
+                rg = md.compute_rg(tload)
+                rgs.append(rg)
+                tloads.append(tload)
+        return np.array(rgs)
 
     def get_rg_distribution(self, scikit=False):
         rgs = self.rg_from_lmp()

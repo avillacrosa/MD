@@ -252,6 +252,7 @@ class LMPSetup(lmp.LMP):
         kappa = 1 / (np.sqrt(2 * self.ionic_strength * 10 ** 3 * cnt.Avogadro / (cnt.epsilon_0 * 80 * cnt.Boltzmann * self.temperature)) * cnt.e)
         return kappa
 
+    #TODO GET THIS FROM DATA ?
     def I_from_debye(kappas, eps_rel=80, T=300, from_angst=False):
         Is = []
         for kappa in kappas:

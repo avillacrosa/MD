@@ -1,0 +1,17 @@
+LAMMPS (7 Aug 2019)
+OMP_NUM_THREADS environment is not set. Defaulting to 1 thread. (src/comm.cpp:93)
+  using 1 OpenMP thread(s) per MPI task
+# Multiprotein complexes
+
+units       real
+dimension   3
+boundary    p p p
+atom_style  full
+
+bond_style  harmonic
+pair_style  ljlambda 0.1 0.0 35.0
+dielectric  80.0
+
+read_data   hps.data
+ERROR on proc 0: Cannot open file hps.data (src/read_data.cpp:2029)
+Last command: read_data   hps.data

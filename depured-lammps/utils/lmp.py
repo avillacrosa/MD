@@ -1,6 +1,7 @@
 import numpy as np
 import os
 import definitions
+import re
 import glob
 import multiprocessing as mp
 from subprocess import run, PIPE
@@ -48,14 +49,18 @@ class LMP:
             pdb_paths.append(fileout)
         return pdb_paths
 
-    def get_lmp_data(self):
+    def get_lmp_data(self, progress=True):
         data = []
+        prog = 0
         for d in self.lmp_drs:
             log_lmp = open(os.path.join(d, 'log.lammps'), 'r')
             lines = log_lmp.readlines()
             data_start = 0
             data_end = 0
             for i, line in enumerate(lines):
+                if progress:
+                    if "run" in line:
+                        prog = int(re.findall(r'\d+', line)[0])
                 if "Step" in line:
                     data_start = i + 1
                 if "Loop" in line:
@@ -64,24 +69,32 @@ class LMP:
                     break
             if data_end == 0:
                 data_end = len(lines)
-            data.append(
-                np.loadtxt(os.path.join(d, 'log.lammps'), skiprows=data_start, max_rows=data_end - data_start))
+            dat = np.loadtxt(os.path.join(d, 'log.lammps'), skiprows=data_start, max_rows=data_end - data_start)
+            data.append(dat)
+            print(f"Run Completed at {dat[:, 0].max()/prog*100:.2f} %")
         data = np.array(data)
         return data
 
-    def get_lmp_temper_data(self, lmp_directories=None):
+    def get_lmp_temper_data(self, lmp_directories=None, progress=True):
         data = []
+        prog = []
+        dends, dstarts = [], 0
         for d in self.lmp_drs:
             if lmp_directories is None:
                 lmps = glob.glob(os.path.join(d, "log.lammps.*"))
             else:
                 lmps = lmp_directories
+            lmps = sorted(lmps, key=lambda x: int(re.findall(r'\d+', os.path.basename(x))[0]))
             for lmp in lmps:
                 log_lmp = open(os.path.join(d, lmp), 'r')
                 lines = log_lmp.readlines()
                 data_start = 0
                 data_end = 0
                 for i, line in enumerate(lines):
+                    if progress:
+                        if "temper" in line:
+                            if int(re.findall(r'\d+', line)[0]) > 100000:
+                                prog.append(int(re.findall(r'\d+', line)[0]))
                     if "Step" in line:
                         data_start = i + 1
                     if "Loop" in line:
@@ -90,8 +103,14 @@ class LMP:
                         break
                 if data_end == 0:
                     data_end = len(lines)
-                data.append(
-                    np.loadtxt(os.path.join(d, lmp), skiprows=data_start, max_rows=data_end - data_start))
+                dends.append(data_end)
+                dstarts = data_start
+        dmin = np.array(dends).min()
+        for i, lmp in enumerate(lmps):
+            dat = np.loadtxt(os.path.join(d, lmp), skiprows=dstarts, max_rows=dmin - dstarts)
+            data.append(dat)
+            step_max = dat[:, 0].max()
+        print(f"Run Completed at {step_max / np.array(prog).mean() * 100:.2f} %")
         data = np.array(data)
         return data
 
@@ -113,8 +132,7 @@ class LMP:
 
                     if "Atoms" in line:
                         reading_masses = False
-                        # TODO Funny how if I dont substract 1 it doesnt work for RAMONS case but does for mine
-                        mass_range[1] = i - 1
+                        mass_range[1] = i
 
                     if reading_masses and line != '\n' and mass_range[0] == 0:
                         mass_range[0] = i
@@ -124,7 +142,7 @@ class LMP:
 
                     if "Bonds" in line:
                         reading_atoms = False
-                        atom_range[1] = i - 1
+                        atom_range[1] = i
 
                     if reading_atoms and line != '\n' and atom_range[0] == 0:
                         atom_range[0] = i
