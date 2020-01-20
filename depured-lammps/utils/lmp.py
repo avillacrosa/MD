@@ -2,16 +2,21 @@ import numpy as np
 import os
 import definitions
 import re
+import shutil
+import mdtraj as md
 import glob
 import multiprocessing as mp
 from subprocess import run, PIPE
 import pathlib
+from numba import jit
 
 
 class LMP:
     def __init__(self, oliba_wd, temper=False):
-        self.sequence = None
+        # TODO DO TEMPER HANDLE AT START
         self.res_dict = definitions.residues
+        # TODO seq from file ?
+        self.sequence = None
 
         self.temper = temper
 
@@ -27,6 +32,7 @@ class LMP:
         # self.data = self.get_lmp_data()
         self.data = None
         self.lmp2pdb = '/home/adria/perdiux/src/lammps-7Aug19/tools/ch2lmp/lammps2pdb.pl'
+        self.re_reorder = '/home/adria/local/bin/reorder_remd_traj.py'
 
     def get_lmp_dirs(self):
         dirs = []
@@ -41,6 +47,9 @@ class LMP:
             dirs = self.lmp_drs
         for dir in dirs:
             files = glob.glob(os.path.join(dir, '*.data'))
+            if glob.glob(os.path.join(dir, '*.pdb')):
+                pdb_paths.append(glob.glob(os.path.join(dir, '*.pdb'))[0])
+                continue
             file = os.path.basename(files[0])
             file = file.replace('.data', '')
             lammps2pdb = self.lmp2pdb
@@ -49,7 +58,7 @@ class LMP:
             pdb_paths.append(fileout)
         return pdb_paths
 
-    def get_lmp_data(self, progress=True):
+    def get_lmp_data(self, progress=False):
         data = []
         prog = 0
         for d in self.lmp_drs:
@@ -75,7 +84,7 @@ class LMP:
         data = np.array(data)
         return data
 
-    def get_lmp_temper_data(self, lmp_directories=None, progress=True):
+    def get_lmp_temper_data(self, lmp_directories=None, progress=False):
         data = []
         prog = []
         dends, dstarts = [], 0
@@ -110,7 +119,8 @@ class LMP:
             dat = np.loadtxt(os.path.join(d, lmp), skiprows=dstarts, max_rows=dmin - dstarts)
             data.append(dat)
             step_max = dat[:, 0].max()
-        print(f"Run Completed at {step_max / np.array(prog).mean() * 100:.2f} %")
+        if progress:
+            print(f"Run Completed at {step_max / np.array(prog).mean() * 100:.2f} %")
         data = np.array(data)
         return data
 
@@ -129,7 +139,6 @@ class LMP:
                 reading_masses, reading_atoms = False, False
                 # TODO Not too smart
                 for i, line in enumerate(lines):
-
                     if "Atoms" in line:
                         reading_masses = False
                         mass_range[1] = i
@@ -149,7 +158,6 @@ class LMP:
 
                     if "Atoms" in line:
                         reading_atoms = True
-            print(mass_range, lines[mass_range[1]])
             masses = np.loadtxt(data_path, skiprows=mass_range[0], max_rows=mass_range[1] - mass_range[0])
             atoms = np.loadtxt(data_path, skiprows=atom_range[0], max_rows=atom_range[1] - atom_range[0])
             mass_dict = {}
@@ -181,5 +189,90 @@ class LMP:
         out = run(command.split(), stdout=PIPE, stderr=PIPE, universal_newlines=True)
         os.chdir(old_wd)
         return out
+
+    # TODO : SLOW, PARALLELIZE ?
+    def _temper_trj_reorder(self):
+        def _get_temper_switches():
+            # Temper runs are single file
+            log_lmp = open(os.path.join(self.o_wd, 'log.lammps'), 'r')
+            lines = log_lmp.readlines()
+            T_start = 0
+            T_end = len(lines)
+            for i, line in enumerate(lines):
+                if 'Step' in line:
+                    T_start = i + 1
+                    break
+            T_log = np.loadtxt(os.path.join(self.o_wd, 'log.lammps'), skiprows=T_start, max_rows=T_end - T_start,
+                               dtype='int')
+            return T_log
+
+        # TODO : !!!!!!!!!!
+        if glob.glob(os.path.join(self.o_wd, '*reorder*')):
+            print("Omitting temper reordering (reorder files already present)")
+            xtcs = glob.glob(os.path.join(self.o_wd, '*reorder*'))
+            xtcs = sorted(xtcs, key=lambda x: int(re.findall(r'\d+', os.path.basename(x))[0]))
+            return xtcs
+
+        T_log = _get_temper_switches()
+
+        # !!!!!!!!! Assuming dump frequency is the same as thermo frequence !!!!!!!!!
+        self.data = self.get_lmp_temper_data(progress=False)
+
+        T_swap_rate = T_log[1, 0] - T_log[0, 1]
+        traj_save_rate = int(self.data[0, 1, 0] - self.data[0, 0, 0])
+        if traj_save_rate < T_swap_rate:
+            trj_frame_incr = int(T_swap_rate/traj_save_rate)
+            runner = 1
+        else:
+            trj_frame_incr = 1
+            runner = int(traj_save_rate/T_swap_rate)
+
+        top = self.make_initial_frame()[0]
+
+        xtcs = glob.glob(os.path.join(self.o_wd, '*.dcd*'))
+        if not xtcs:
+            xtcs = glob.glob(os.path.join(self.o_wd, '*temper*.xtc*'))
+        if not xtcs:
+            raise SystemError("No trajectory files to read (attempted .xtc and .dcs)")
+        xtcs = sorted(xtcs, key=lambda x: int(re.findall(r'\d+', os.path.basename(x))[0]))
+        reordered_data = np.zeros_like(self.data)
+
+        trajs, trajs_xyz = [], []
+        nmin = []
+        for xtc in xtcs:
+            tr = md.load(xtc, top=top)
+            nmin.append(tr.n_frames)
+            trajs.append(tr)
+            trajs_xyz.append(tr.xyz)
+        for k, tr in enumerate(trajs):
+            trajs[k] = tr[:np.array(nmin).min()]
+        reordered_trajs = np.zeros(shape=(len(trajs), trajs[0].n_frames, trajs[0].n_atoms, 3))
+        c = 1
+
+        # TODO: Time consuming...
+        for i in range(1, T_log.shape[0], runner):
+            print(f'Swapping progress : {i/T_log.shape[0]*100.:.2f} %', end='\r')
+            if runner != 1:
+                c += 1
+                cr = slice(c-1, c, 1)
+            else:
+                cr = slice(trj_frame_incr*(i-1), trj_frame_incr*i, 1)
+            for Ti, T in enumerate(T_log[i, 1:]):
+                reordered_data[T, cr, :] = self.data[Ti, cr, :]
+                reordered_trajs[T, cr, :, :] = trajs[Ti][cr].xyz
+        print(f'Swapping progress : 100 %', end='\r')
+        print('\r')
+
+        for i, rtrj in enumerate(reordered_trajs):
+            trajs[i].xyz = rtrj
+
+        xtc_paths = []
+        for k in range(len(trajs)):
+            f = f'../default_output/reorder-{k}.xtc'
+            xtc_paths.append(os.path.abspath(f))
+            trajs[k].save_xtc(f)
+            shutil.copyfile(f, os.path.join(self.o_wd, f'reorder-{k}.xtc'))
+        self.data = reordered_data
+        return xtc_paths
 
 # TODO Handle Temperatures or Ionic strengths...

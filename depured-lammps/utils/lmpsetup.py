@@ -14,7 +14,10 @@ from string import Template
 class LMPSetup(lmp.LMP):
     def __init__(self, seq, **kw):
         super(LMPSetup, self).__init__(**kw)
-        self.p_wd = self.oliba_wd.replace('/oliba', '')
+        self.p_wd = self.o_wd.replace('/perdiux', '')
+        if not os.path.isdir(self.o_wd):
+            print(f"Directory does not exist. Creating dir : {self.o_wd}")
+            os.mkdir(self.o_wd)
         self.sequence = seq
 
         self.temperature = 300
@@ -46,6 +49,7 @@ class LMPSetup(lmp.LMP):
         self.job_name = 'hps'
         self.processors = 8
         # self.temperatures = np.linspace(150.0, 600.0, self.processors)
+        # TODO HARD CODED...
         self.temperatures = '150.0 170.0 192.5 217.5 247.5 280.0 320.0 362.5 410.0 467.5 530.0 600.0'
         self.swap_every = 1000
 
@@ -122,9 +126,9 @@ class LMPSetup(lmp.LMP):
                 lines.append(line)
         self.hps_pairs = lines
 
-    def write_hps_files(self, output_dir='default'):
+    def write_hps_files(self, output_dir='default', equil=False):
         if output_dir == 'default':
-            output_dir = self.oliba_wd
+            output_dir = self.o_wd
 
         self._generate_lmp_input()
         self._generate_qsub()
@@ -136,6 +140,8 @@ class LMPSetup(lmp.LMP):
 
         if self.temper:
             lmp_temp_file = open('../templates/replica/input_template.lmp')
+        elif equil:
+            lmp_temp_file = open('../templates/equilibration/input_template.lmp')
         else:
             lmp_temp_file = open('../templates/general/input_template.lmp')
         lmp_template = Template(lmp_temp_file.read())
@@ -160,11 +166,11 @@ class LMPSetup(lmp.LMP):
     def get_equilibration_xyz(self):
         lmp2pdb = '/home/adria/perdiux/src/lammps-7Aug19/tools/ch2lmp/lammps2pdb.pl'
         meta_maker = LMPSetup(oliba_wd='../default_output', seq=self.sequence)
-        meta_maker.t = 100000
-        meta_maker.del_missing_aas()
+        meta_maker.t = 10000
+        # meta_maker.del_missing_aas()
         meta_maker.get_hps_params()
         meta_maker.get_hps_pairs()
-        meta_maker.write_hps_files(output_dir=None)
+        meta_maker.write_hps_files(output_dir=None, equil=True)
         meta_maker.run('lmp.lmp', n_cores=8)
 
         os.chdir('/home/adria/scripts/depured-lammps/default_output')
@@ -172,7 +178,8 @@ class LMPSetup(lmp.LMP):
         os.system(lmp2pdb + ' ' + file)
         fileout = file + '_trj.pdb'
 
-        traj = md.load('hps_traj.xtc', top=fileout)
+        #TODO ONLY DO RUN IF XTC NOT PRESENT...
+        traj = md.load('xtc_traj.xtc', top=fileout)
         self.xyz = traj[-1].xyz*10
         mx = np.abs(self.xyz).max()
         self.box_size = int(mx*3)
@@ -191,7 +198,7 @@ class LMPSetup(lmp.LMP):
         self.lmp_file_dict["t"] = self.t
         self.lmp_file_dict["dt"] = self.dt
         self.lmp_file_dict["pair_coeff"] = ''.join(self.hps_pairs)
-        self.lmp_file_dict["debye"] = round(self.debye_wv*10**-10, 1)
+        self.lmp_file_dict["debye"] = round(1/self.debye_length()*10**-10, 3)
         self.lmp_file_dict["v_seed"] = self.v_seed
         self.lmp_file_dict["langevin_seed"] = self.langevin_seed
         self.lmp_file_dict["temp"] = self.temperature
@@ -249,11 +256,11 @@ class LMPSetup(lmp.LMP):
         self.qsub_file_dict["jobname"] = self.job_name
 
     def debye_length(self):
-        kappa = 1 / (np.sqrt(2 * self.ionic_strength * 10 ** 3 * cnt.Avogadro / (cnt.epsilon_0 * 80 * cnt.Boltzmann * self.temperature)) * cnt.e)
+        kappa = np.sqrt(cnt.epsilon_0 * 80 * cnt.Boltzmann * self.temperature) / (np.sqrt(2 * self.ionic_strength * 10 ** 3 * cnt.Avogadro) * cnt.e)
         return kappa
 
     #TODO GET THIS FROM DATA ?
-    def I_from_debye(kappas, eps_rel=80, T=300, from_angst=False):
+    def I_from_debye(self):
         Is = []
         for kappa in kappas:
             kappa = 1 / kappa
