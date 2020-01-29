@@ -26,8 +26,8 @@ class Analysis(lmp.LMP):
         self.equilibration = 3e6
         super(Analysis, self).__init__(**kw)
 
-    def contact_map(self, use='default'):
-        print("="*20, f"Calculating contact map using {use}", "="*20)
+    def distance_map(self, use='default', contacts=False):
+        # print("="*20, f"Calculating contact map using {use}", "="*20)
         pdbs = self.make_initial_frame()
         topo = pdbs[0]
         contact_maps = []
@@ -54,7 +54,13 @@ class Analysis(lmp.LMP):
                 pairs = list(itertools.product(range(traj.top.n_atoms - 1), range(1, traj.top.n_atoms)))
                 d = md.compute_distances(traj, pairs)
                 d = md.geometry.squareform(d, pairs)
-                contact_map = d.mean(0)
+                if contacts:
+                    dcop = np.copy(d)
+                    dcop[d < 0.6] = 1.
+                    dcop[d > 0.6] = 0.
+                    contact_map = dcop.mean(0)
+                else:
+                    contact_map = d.mean(0)
             else:
                 pool = mp.Pool()
                 ranges = np.linspace(0, traj.n_frames, mp.cpu_count() + 1, dtype='int')
@@ -69,13 +75,15 @@ class Analysis(lmp.LMP):
             contact_map = contact_map * 10
             contact_maps.append(contact_map)
         self.contacts = np.array(contact_maps)
-        print("="*20, "CONTACT MAP CALCULATION FINISHED", "="*20)
+        # print("="*20, "CONTACT MAP CALCULATION FINISHED", "="*20)
         return contact_maps
 
-    def ij_from_contacts(self, use='default'):
-        print("="*20, f"Calculating ij from contact map using {use}", "="*20)
-        if self.contacts is None:
-            self.contact_map(use=use)
+    def ij_from_contacts(self, use='default', contacts=None):
+        # print("="*20, f"Calculating ij from contact map using {use}", "="*20)
+        if contacts is None:
+            self.distance(use=use)
+        else:
+            self.contacts = contacts
         tot_means = []
         tot_ijs = []
         for contact in self.contacts:
@@ -87,12 +95,15 @@ class Analysis(lmp.LMP):
                 ijs.append(d)
             tot_ijs.append(ijs)
             tot_means.append(means)
-        print("="*20, "D_IJ FROM CONTACT MAP CALCULATION FINISHED", "="*20)
+        # print("="*20, "D_IJ FROM CONTACT MAP CALCULATION FINISHED", "="*20)
         return np.array(tot_ijs), np.array(tot_means)
 
-    def flory_scaling_fit(self, r0=None, use='default'):
-        print("="*20, f"Starting flory exponent calculation for R0 = {r0} using {use}", "="*20)
-        tot_ijs, tot_means = self.ij_from_contacts(use=use)
+    def flory_scaling_fit(self, r0=None, use='default', ijs=None):
+        # print("="*20, f"Starting flory exponent calculation for R0 = {r0} using {use}", "="*20)
+        if ijs is None:
+            tot_ijs, tot_means = self.ij_from_contacts(use=use)
+        else:
+            tot_ijs, tot_means = ijs[0], ijs[1]
         florys, r0s = [], []
         for i, ij in enumerate(tot_ijs):
             mean = tot_means[i]
@@ -106,10 +117,10 @@ class Analysis(lmp.LMP):
                 fit_r0 = r0
             florys.append(fit_flory)
             r0s.append(fit_r0)
-        print("="*20, "FLORY EXPONENT CALCULATION FINISHED", "="*20)
+        # print("="*20, "FLORY EXPONENT CALCULATION FINISHED", "="*20)
         return np.array(florys), np.array(r0s)
 
-    def contact_map_by_residue(self):
+    def distance_map_by_residue(self):
         contacts = self.contacts
         dict_res_translator = {'A': 0, 'R': 1, 'N': 2, 'D': 3, 'C': 4, 'E': 5, 'Q': 6, 'G': 7, 'H': 8, 'I': 9, 'L': 10,
                                'K': 11, 'M': 12, 'F': 13, 'P': 14, 'S': 15, 'T': 16, 'W': 17, 'Y': 18, 'V': 19}

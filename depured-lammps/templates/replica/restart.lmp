@@ -7,12 +7,7 @@ bond_style  harmonic
 pair_style  ljlambda $debye 0.0 35.0
 dielectric  $water_perm
 
-
-read_data   data.data
-
-bond_coeff          1     9.600     3.8
-
-$pair_coeff
+read_restart rst.1
 
 special_bonds fene
 neighbor  3.5 multi

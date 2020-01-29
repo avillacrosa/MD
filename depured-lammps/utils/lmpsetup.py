@@ -5,6 +5,8 @@ import numpy as np
 import multiprocessing as mp
 from subprocess import run, PIPE
 import shutil
+import math
+import random
 import os
 import glob
 import mdtraj as md
@@ -12,7 +14,7 @@ from string import Template
 
 
 class LMPSetup(lmp.LMP):
-    def __init__(self, seq, **kw):
+    def __init__(self, seq, chains=1, **kw):
         super(LMPSetup, self).__init__(**kw)
         self.p_wd = self.o_wd.replace('/perdiux', '')
         if not os.path.isdir(self.o_wd):
@@ -24,8 +26,9 @@ class LMPSetup(lmp.LMP):
         self.ionic_strength = 100e-3
         self.debye_wv = 1/self.debye_length()
         self.dt = 10.
-        self.t = 10000000
+        self.t = 100000000
         self.xyz = None
+        self.n_chains = chains
 
         self.seq_charge = None
         self.residue_dict = dict(definitions.residues)
@@ -33,6 +36,7 @@ class LMPSetup(lmp.LMP):
 
         self.lmp = '/home/adria/local/lammps/bin/lmp'
         self.box_size = 2500
+        self.water_perm = 80.
         self.hps_scale = 1.0
 
         self.hps_epsilon = 0.2
@@ -46,8 +50,9 @@ class LMPSetup(lmp.LMP):
         self.langevin_seed = 451618
         self.save = 50000
 
-        self.job_name = 'hps'
-        self.processors = 8
+        #TODO : Fancy job name ?
+        self.job_name = f'hps_{os.path.basename(self.o_wd)}'
+        self.processors = 12
         # self.temperatures = np.linspace(150.0, 600.0, self.processors)
         # TODO HARD CODED...
         self.temperatures = '150.0 170.0 192.5 217.5 247.5 280.0 320.0 362.5 410.0 467.5 530.0 600.0'
@@ -81,16 +86,6 @@ class LMPSetup(lmp.LMP):
                 id += 1
         ordered_keys = sorted(self.residue_dict, key=lambda x: (self.residue_dict[x]['id']))
         self.key_ordering = ordered_keys
-
-    def get_charge_seq(self):
-        charged_plus = []
-        charged_minus = []
-        for i, aa in enumerate(self.sequence):
-            if self.residue_dict[aa]["q"] < 0:
-                charged_minus.append(i)
-            if self.residue_dict[aa]["q"] > 0:
-                charged_plus.append(i)
-        return charged_plus, charged_minus
 
     def get_hps_params(self):
         for key in self.residue_dict:
@@ -132,7 +127,7 @@ class LMPSetup(lmp.LMP):
 
         self._generate_lmp_input()
         self._generate_qsub()
-        self._generate_topo_input()
+        self._generate_data_input()
 
         topo_temp_file = open('../templates/topo_template.data')
         topo_template = Template(topo_temp_file.read())
@@ -163,10 +158,10 @@ class LMPSetup(lmp.LMP):
             shutil.copyfile(f'../default_output/{self.job_name}.qsub', os.path.join(output_dir, f'{self.job_name}.qsub'))
             shutil.copyfile(f'../default_output/lmp.lmp', os.path.join(output_dir, 'lmp.lmp'))
 
-    def get_equilibration_xyz(self):
+    def get_equilibration_xyz(self, save=False, t=100000):
         lmp2pdb = '/home/adria/perdiux/src/lammps-7Aug19/tools/ch2lmp/lammps2pdb.pl'
         meta_maker = LMPSetup(oliba_wd='../default_output', seq=self.sequence)
-        meta_maker.t = 10000
+        meta_maker.t = t
         # meta_maker.del_missing_aas()
         meta_maker.get_hps_params()
         meta_maker.get_hps_pairs()
@@ -184,13 +179,61 @@ class LMPSetup(lmp.LMP):
         mx = np.abs(self.xyz).max()
         self.box_size = int(mx*3)
 
-        files = glob.glob('*')
-        for file in files:
-            os.remove(file)
+        print(traj[-1].unitcell_lengths)
+        if save:
+            print(f"-> Saving equilibration pdb at {os.path.join(self.oliba_wd, 'equilibration.pdb')}")
+            traj[-1].save_pdb(os.path.join(self.oliba_wd, 'equilibration.pdb'))
+        else:
+            print(f"-> Saving equilibration pdb at {os.path.join('../default_output', 'equilibration.pdb')}")
+            traj[-1].save_pdb(os.path.join('../default_output', 'equilibration.pdb'))
 
     def get_pdb_xyz(self, pdb):
         struct = md.load_pdb(pdb)
-        self.xyz = struct.xyz*10
+        struct.center_coordinates()
+        rg = md.compute_rg(struct)
+        d = rg[0] * self.n_chains ** (1 / 3) * 25
+        struct.unitcell_lengths = np.array([[d, d, d]])
+
+        if self.n_chains == 1:
+            self.xyz = struct.xyz*10
+            self.box_size = d*10
+            struct.save_pdb('../default_output/centered.pdb')
+        # TODO : Include padding ?!
+        else:
+            # TEST
+            n_cells = int(math.ceil(self.n_chains ** (1 / 3)))
+            unitcell_d = d / n_cells
+
+            def _build_box():
+                c = 0
+                # TODO : CORRECT PADDING !
+                # padding = unitcell_d/4
+                padding = 0
+                for z in range(n_cells):
+                    for y in range(n_cells):
+                        for x in range(n_cells):
+                            if c == self.n_chains:
+                                return adder
+                            c += 1
+                            dist = [unitcell_d * (x + 1 / 2), unitcell_d * (y + 1 / 2), unitcell_d * (z + 1 / 2)]
+                            for di in range(len(dist)):
+                                if dist[di] > d/2:
+                                    dist[di] -= padding
+                                else:
+                                    dist[di] += padding
+
+                            struct.xyz[0, :, :] = struct.xyz[0, :, :] + dist
+                            if x + y + z == 0:
+                                adder = struct[:]
+                            else:
+                                adder = adder.stack(struct)
+                            struct.xyz[0, :, :] = struct.xyz[0, :, :] - dist
+                return adder
+            system = _build_box()
+
+            self.xyz = system.xyz*10
+            self.box_size = d*10
+            system.save_pdb('../default_output/double_eq.pdb')
 
     def _generate_lmp_input(self):
         if self.hps_pairs is None:
@@ -203,12 +246,14 @@ class LMPSetup(lmp.LMP):
         self.lmp_file_dict["langevin_seed"] = self.langevin_seed
         self.lmp_file_dict["temp"] = self.temperature
         self.lmp_file_dict["temperatures"] = self.temperatures
+        self.lmp_file_dict["water_perm"] = self.water_perm
         self.lmp_file_dict["swap_every"] = self.swap_every
         self.lmp_file_dict["save"] = self.save
+        self.lmp_file_dict["restart"] = int(self.t/10000)
         # TODO this sucks but it is what it is
         self.lmp_file_dict["replicas"] = np.array2string(np.linspace(0, self.processors-1, self.processors, dtype='int'))[1:-1]
 
-    def _generate_topo_input(self, nchains=1):
+    def _generate_data_input(self):
         masses = []
         for i in range(1, len(self.residue_dict)+1):
             for key in self.residue_dict:
@@ -219,7 +264,7 @@ class LMPSetup(lmp.LMP):
         k = 1
         spaghetti = False
 
-        for chain in range(1, nchains + 1):
+        for chain in range(1, self.n_chains + 1):
             if self.xyz is None:
                 xyz = [-240., -240 + chain * 20, -240]
                 spaghetti = True
@@ -238,13 +283,13 @@ class LMPSetup(lmp.LMP):
                     bonds.append(f'       {k:3d}       1       {k:3d}       {k + 1:3d}\n')
                 k += 1
 
-        self.topo_file_dict["natoms"] = nchains * len(self.sequence)
-        self.topo_file_dict["nbonds"] = nchains * (len(self.sequence) - 1)
+        self.topo_file_dict["natoms"] = self.n_chains * len(self.sequence)
+        self.topo_file_dict["nbonds"] = self.n_chains * (len(self.sequence) - 1)
         self.topo_file_dict["atom_types"] = len(self.residue_dict)
         self.topo_file_dict["masses"] = ''.join(masses)
         self.topo_file_dict["atoms"] = ''.join(atoms)
         self.topo_file_dict["bonds"] = ''.join(bonds)
-        self.topo_file_dict["box_size"] = self.box_size
+        self.topo_file_dict["box_size"] = int(self.box_size/2)
 
     def _generate_qsub(self):
         self.qsub_file_dict["work_dir"] = self.p_wd

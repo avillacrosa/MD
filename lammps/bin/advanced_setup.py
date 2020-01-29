@@ -104,7 +104,7 @@ def build_lmp_dT(temps, seq, oliba_outdir, pre_id='', lambdas_from='hps'):
         shutil.copyfile(qsub_file, os.path.join(os.path.dirname(wd), os.path.basename(qsub_file)))
 
 
-def build_lmp_dI_P(sites, ionic_strengths, seq=cpeb4, mode='random'):
+def build_lmp_dI_P(sites, seq=cpeb4, mode='nn'):
     i_sites = sites
     f_sites = []
     if mode == 'random':
@@ -119,16 +119,17 @@ def build_lmp_dI_P(sites, ionic_strengths, seq=cpeb4, mode='random'):
     for site in f_sites:
         aseq[site-1] = 'D'
     seq = ''.join(aseq)
-    build_lmp_dI(ionic_strengths, seq=seq, pre_id='12D')
+    print(seq)
+
 
 # oliba_outdir = '/home/adria/perdiux/prod/lammps/dignon'
 oliba_outdir = '/home/adria/perdiux/prod/lammps/dignon/LONG'
 # Ts = [150.0, 170.1, 193.0, 218.9, 248.3, 281.7, 319.5, 362.4, 411.1, 466.3, 529.0, 600.0]
 # build_lmp_dT(Ts, seq=hnRPA2_CTD, oliba_outdir=oliba_outdir, lambdas_from='hps')
 
-build_lmp_dI([25e-3, 100e-3, 400e-3], seq=cpeb4, oliba_outdir=oliba_outdir, lambdas_from='hps', pre_id='LONG')
-build_lmp_dI([25e-3, 100e-3, 400e-3], seq=cpeb4, oliba_outdir=oliba_outdir, lambdas_from='none', pre_id='L0-LONG')
+# build_lmp_dI(seq=cpeb4, oliba_outdir=oliba_outdir, lambdas_from='hps', pre_id='LONG')
+# build_lmp_dI([25e-3, 100e-3, 400e-3], seq=cpeb4, oliba_outdir=oliba_outdir, lambdas_from='none', pre_id='L0-LONG')
 # build_lmp_dI_q0(Is, seq=cpeb4, oliba_outdir=oliba_outdir)
 # build_lmp_dI(Is, seq=cpeb4, lambdas_from='hps')
 # build_lmp_dI_qHist(redIs, seq=cpeb4)
-# build_lmp_dI_P(cpeb412d, Is, seq=cpeb4, mode='definite')
+build_lmp_dI_P(cpeb47d, seq=cpeb4, mode='definite')

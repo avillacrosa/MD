@@ -2,6 +2,8 @@ import numpy as np
 import os
 import definitions
 import re
+import random
+import math
 import shutil
 import mdtraj as md
 import glob
@@ -12,13 +14,15 @@ from numba import jit
 
 
 class LMP:
-    def __init__(self, oliba_wd, temper=False):
+    def __init__(self, oliba_wd, temper=False, force_reorder=False):
         # TODO DO TEMPER HANDLE AT START
         self.res_dict = definitions.residues
         # TODO seq from file ?
         self.sequence = None
+        self.residue_dict = dict(definitions.residues)
 
         self.temper = temper
+        self.force_reorder = force_reorder
 
         self.o_wd = oliba_wd
         self.p_wd = oliba_wd.replace('/perdiux', '')
@@ -124,7 +128,99 @@ class LMP:
         data = np.array(data)
         return data
 
+    def charge_scramble(self, sequence, keep_positions=True, shuffles=1):
+        charges = self.get_charge_seq(sequence=sequence)[0]
+        old_charges = charges[:]
+        seqs, deltas, scds = [sequence], [self.pappu_delta(sequence)], [self.chan_scd(sequence)]
+        for i in range(shuffles):
+            seq = list(sequence)
+            if keep_positions:
+                random.shuffle(charges)
+            else:
+                charges = np.random.randint(0, len(seq), len(charges))
+            for k in range(len(charges)):
+                seq[old_charges[k]], seq[charges[k]] = seq[charges[k]], seq[old_charges[k]]
+            seqs.append(''.join(seq))
+            deltas.append(self.pappu_delta(seq))
+            scds.append(self.chan_scd(seq))
+        deltas = np.array(deltas)
+        seqs = np.array(seqs)
+        scds = np.array(scds)
+
+        deltas = deltas/deltas.max()
+
+        idx = deltas.argsort()
+        return seqs[idx][::-1], deltas[idx][::-1], scds[idx][::-1]
+
+    def get_charge_seq(self, sequence, window=9):
+        charged_plus = []
+        charged_minus = []
+        # for i, aa in enumerate(sequence):
+        #     if self.residue_dict[aa]["q"] < 0:
+        #         charged_minus.append(i)
+        #     if self.residue_dict[aa]["q"] > 0:
+        #         charged_plus.append(i)
+        win = np.zeros(len(sequence))
+        rr = int((window-1)/2)
+        for i, aa in enumerate(sequence):
+            for j in range(-rr, rr+1):
+                if len(sequence) > i+j > 0:
+                    jaa = sequence[i+j]
+                    win[i] += self.residue_dict[jaa]["q"]
+                    #CORRECTOR
+                    # if 1 > abs(self.residue_dict[jaa]["q"]) > 0:
+                    #     win[i] += 1 - self.residue_dict[jaa]["q"]
+            win[i] /= window
+        plus = np.copy(win)
+        minus = np.copy(win)
+        plus[plus < 0.] = 0
+        minus[minus > 0.] = 0
+        return win, plus, minus
+            # if self.residue_dict[aa]["q"] < 0:
+            #     charged_minus.append(i)
+            # if self.residue_dict[aa]["q"] > 0:
+            #     charged_plus.append(i)
+        return sorted(charged_plus + charged_minus), charged_plus, charged_minus
+
+    def pappu_delta(self, sequence, g=5):
+        # TODO: ONLY FOR PROLINE-LESS SEQUENCES! What the hell ?
+        N = len(sequence) - (g - 1)
+        itot, iplus, iminus = self.get_charge_seq(sequence)
+        f_plus = len(iplus)/len(itot)
+        f_minus = len(iminus)/len(itot)
+        sigma = (f_plus - f_minus) ** 2 / (f_plus + f_minus)
+        delta = 0
+        for i in range(N):
+            blob = sequence[i:i + g]
+            total, plus, minus = self.get_charge_seq(blob)
+            if len(plus) != 0 or len(minus) != 0:
+                f_plus_i = len(plus) / (len(plus) + len(minus))
+                f_minus_i = len(minus) / (len(plus) + len(minus))
+                sigma_i = (f_plus_i - f_minus_i) ** 2 / (f_plus_i + f_minus_i)
+                delta += (sigma_i - sigma) ** 2 / N
+        return delta
+
+    def chan_scd(self, sequence):
+        total, plus, minus = self.get_charge_seq(sequence)
+        scd = 0
+        # TODO DUMB....
+        for i in range(len(total)):
+            for j in range(i, len(total)):
+                sigma_i = 0
+                sigma_j = 0
+                if total[i] in plus:
+                    sigma_i = +1
+                if total[i] in minus:
+                    sigma_i = -1
+                if total[j] in plus:
+                    sigma_j = +1
+                if total[j] in minus:
+                    sigma_j = -1
+                scd += sigma_i*sigma_j*np.sqrt(np.abs(total[i]-total[j]))
+        return scd/(len(sequence))
+
     def set_sequence(self, seq, from_file=False):
+        # TODO !!
         if from_file:
             print("TODO")
         self.sequence = seq
@@ -207,11 +303,12 @@ class LMP:
             return T_log
 
         # TODO : !!!!!!!!!!
-        if glob.glob(os.path.join(self.o_wd, '*reorder*')):
-            print("Omitting temper reordering (reorder files already present)")
-            xtcs = glob.glob(os.path.join(self.o_wd, '*reorder*'))
-            xtcs = sorted(xtcs, key=lambda x: int(re.findall(r'\d+', os.path.basename(x))[0]))
-            return xtcs
+        if not self.force_reorder:
+            if glob.glob(os.path.join(self.o_wd, '*reorder*')):
+                print("Omitting temper reordering (reorder files already present)")
+                xtcs = glob.glob(os.path.join(self.o_wd, '*reorder*'))
+                xtcs = sorted(xtcs, key=lambda x: int(re.findall(r'\d+', os.path.basename(x))[0]))
+                return xtcs
 
         T_log = _get_temper_switches()
 
@@ -235,6 +332,7 @@ class LMP:
         if not xtcs:
             raise SystemError("No trajectory files to read (attempted .xtc and .dcs)")
         xtcs = sorted(xtcs, key=lambda x: int(re.findall(r'\d+', os.path.basename(x))[0]))
+
         reordered_data = np.zeros_like(self.data)
 
         trajs, trajs_xyz = [], []
@@ -244,25 +342,26 @@ class LMP:
             nmin.append(tr.n_frames)
             trajs.append(tr)
             trajs_xyz.append(tr.xyz)
+        # IN CASE SIMULATION HAS NOT FINISHED, FORCE SAME NUMBER OF FRAMES BETWEEN REPLICAS
         for k, tr in enumerate(trajs):
             trajs[k] = tr[:np.array(nmin).min()]
         reordered_trajs = np.zeros(shape=(len(trajs), trajs[0].n_frames, trajs[0].n_atoms, 3))
-        c = 1
-
+        c = 0
         # TODO: Time consuming...
-        for i in range(1, T_log.shape[0], runner):
+        print(runner)
+        for i in range(0, T_log.shape[0], runner):
             print(f'Swapping progress : {i/T_log.shape[0]*100.:.2f} %', end='\r')
             if runner != 1:
+                cr = slice(c, c+1, 1)
                 c += 1
-                cr = slice(c-1, c, 1)
             else:
-                cr = slice(trj_frame_incr*(i-1), trj_frame_incr*i, 1)
+                #TODO MIGHT BLOW UP ?
+                cr = slice(trj_frame_incr*(i), trj_frame_incr*(i+1), 1)
             for Ti, T in enumerate(T_log[i, 1:]):
                 reordered_data[T, cr, :] = self.data[Ti, cr, :]
                 reordered_trajs[T, cr, :, :] = trajs[Ti][cr].xyz
-        print(f'Swapping progress : 100 %', end='\r')
-        print('\r')
 
+        print('\r', end='\r')
         for i, rtrj in enumerate(reordered_trajs):
             trajs[i].xyz = rtrj
 
@@ -273,6 +372,8 @@ class LMP:
             trajs[k].save_xtc(f)
             shutil.copyfile(f, os.path.join(self.o_wd, f'reorder-{k}.xtc'))
         self.data = reordered_data
+        print(reordered_data.shape)
+        np.savetxt('../default_output/datareorder.lammps', reordered_data[0,:,:])
         return xtc_paths
 
 # TODO Handle Temperatures or Ionic strengths...
