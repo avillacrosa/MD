@@ -1,0 +1,9 @@
+#$ -pe smp 12
+#$ -q all.q
+#$ -l mem_free=10G
+#$ -N hps_5
+#$ -M adria.villacrosa@irbbarcelona.org
+#!/bin/bash
+echo $HOSTNAME
+cd /home/adria/prod/lammps/dignon/MULTICHAIN/5
+/home/ramon/local/openmpi/202_gcc630/bin/mpirun -np 12 /home/adria/local/lammps/bin/lmp -partition 12x1 -in lmp.lmp

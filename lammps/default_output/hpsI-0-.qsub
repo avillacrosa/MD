@@ -1,9 +1,0 @@
-#$ -pe smp 8
-#$ -q all.q
-#$ -l mem_free=10G
-#$ -N hpsI-0-
-#$ -M adria.villacrosa@irbbarcelona.org
-#!/bin/bash
-echo $HOSTNAME
-cd /home/adria/prod/lammps/dignon/TEST/asyn/TEST/asyn/3.246
-/home/ramon/local/openmpi/202_gcc630/bin/mpirun -np 8 /home/adria/local/lammps/bin/lmp -in hps3.246.lmp

@@ -24,19 +24,6 @@ residues = {
     "V": {"id": 20, "name": 'VAL', "mass": 99.0699997, "q": 0.00},
 }
 
-p_sites= {
-    "CPEB4":{
-        "7D" : [18, 38, 40, 97, 252, 255, 353],
-        "12D": [18, 38, 40, 97, 252, 255, 326, 330, 332, 353, 359, 364]
-    },
-    "CPEB4D4":{
-        "7D": [18, 38, 40, 97, 252, 255, 353],
-        "12D": [18, 38, 40, 97, 252, 255, 326, 330, 332, 353, 359, 364]
-    }
-}
-
-cpeb4d4_sites = (403, 410)
-
 sigmas = {}
 with open('../data/sigmas.dat') as filein:
     for line in filein:
@@ -48,3 +35,10 @@ with open('../data/lambdas.dat') as filein:
     for line in filein:
         line = line.split()
         lambdas[line[0]] = float(line[1])
+
+# Contact Thresholds in Angstroms
+vdw_th = 6.
+hh_th = 3.
+spi_th = 4.9
+catpi_th = 7.
+salt_th = 6.
