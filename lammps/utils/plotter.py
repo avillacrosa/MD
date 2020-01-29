@@ -137,7 +137,7 @@ class Plotter(analysis.Analysis):
         plt.xlabel("$\mathregular{T_index}$")
         plt.plot(rg.mean(axis=1))
 
-
+    # TODO !!!! Still need to be translated, but they are pretty niche atm !!!!
     def plot_aa_map(dir, seq, ref_dir=None):
         pdb = conversion.getPDBfromLAMMPS(os.path.join(dir, 'hps'))
         xtc = os.path.join(dir, 'hps_traj.xtc')
@@ -166,6 +166,7 @@ class Plotter(analysis.Analysis):
         plt.savefig('../default_output/res_map.png')
         plt.show()
 
+    # TODO !!!! Still need to be translated, but they are pretty niche atm !!!!
     def plot_gaussian_kde(dir, equil=3000):
         rgs, Is = calc.rg_from_lmp(dir, equil)
         rgs = rgs[0]
@@ -182,7 +183,7 @@ class Plotter(analysis.Analysis):
         plt.legend()
         plt.show()
 
-
+    # TODO !!!! Still need to be translated, but they are pretty niche atm !!!!
     def plot_autocorrelation(dir, equil=3655000):
         rgs = calc.rg_from_lmp(dir, equil)
         rgs = rgs[0][0]
