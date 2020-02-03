@@ -1,0 +1,23 @@
+ LAMMPS data file for protein binding
+ 
+         $natoms   atoms
+         $nbonds   bonds
+
+          $atom_types   atom types
+           1   bond types
+ 
+  -$box_size       $box_size        xlo xhi
+  -$box_size       $box_size        ylo yhi
+  -$box_size       $box_size        zlo zhi
+ 
+ Masses
+
+$masses
+ 
+ Atoms
+
+$atoms
+ 
+ Bonds
+ 
+$bonds
