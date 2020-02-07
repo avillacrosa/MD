@@ -1,9 +1,0 @@
-#$ -pe smp $np
-#$ -q all.q
-#$ -l mem_free=10G
-#$ -N $jobname
-#$ -M adria.villacrosa@irbbarcelona.org
-#!/bin/bash
-echo $HOSTNAME
-cd $work_dir
-$command
