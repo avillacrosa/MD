@@ -27,7 +27,7 @@ variable r world $replicas
 
 velocity      all create $T $v_seed
 fix           fxnve  all nve
-fix           fxlange all langevin $T $T 10000 $langevin_seed
+fix           fxlange all langevin $T $T $langevin_damp $langevin_seed
 
 compute rg all gyration
 

@@ -3,13 +3,13 @@ import os
 import definitions
 import re
 import random
-import math
 import shutil
 import mdtraj as md
 import glob
 import multiprocessing as mp
 from subprocess import run, PIPE
 import pathlib
+import scipy.constants as cnt
 from numba import jit
 
 
@@ -33,6 +33,8 @@ class LMP:
 
         self.hps_epsilon = 0.2
         self.hps_pairs = None
+
+        self.structures = None
         # if temper:
         #     self.data = self.get_lmp_temper_data()
         # else:
@@ -89,7 +91,8 @@ class LMP:
                 data_end = len(lines)
             dat = np.loadtxt(os.path.join(d, 'log.lammps'), skiprows=data_start, max_rows=data_end - data_start)
             data.append(dat)
-            print(f"Run Completed at {dat[:, 0].max()/prog*100:.2f} %")
+            # TODO : BROKEN!
+            # print(f"Run Completed at {dat[:, 0].max()/prog*100:.2f} %")
         data = np.array(data)
         return data
 
@@ -133,6 +136,57 @@ class LMP:
         data = np.array(data)
         return data
 
+    def get_lmp_E(self):
+        if self.temper:
+            self.data = self.get_lmp_temper_data()
+            E = self.data[:, :, [1, 2]]
+        else:
+            self.data = self.get_lmp_data()
+            E = self.data[:, :, [1, 2]]
+        return E
+
+    def get_eps(self):
+        lmp_path = glob.glob(os.path.join(self.o_wd, '*.lmp'))
+        if lmp_path:
+            with open(lmp_path[0], 'r') as log_lmp:
+                lines = log_lmp.readlines()
+                for line in lines:
+                    if "dielectric" in line:
+                        eps = re.findall(r'\d+', line)[0]
+                        break
+        return eps
+
+    def get_ionic_strength(self):
+        lmp_path = glob.glob(os.path.join(self.o_wd, '*.lmp'))
+        if lmp_path:
+            with open(lmp_path[0], 'r') as log_lmp:
+                lines = log_lmp.readlines()
+                for line in lines:
+                    if "ljlambda" in line:
+                        debye = re.findall(r'\d+\.?\d*', line)[0]
+                        unroundedI = self.get_I_from_debye(float(debye), eps=float(self.get_eps()))
+                        if unroundedI >= 0.1:
+                            I = round(unroundedI, 1)
+                            break
+                        else:
+                            I = round(unroundedI, 3)
+                            break
+        return I
+
+    def get_temperatures(self):
+        if not self.temper:
+            print("TODO IF NOT TEMPER")
+            return
+        lmp_path = glob.glob(os.path.join(self.o_wd, '*.lmp'))
+        if lmp_path:
+            with open(lmp_path[0], 'r') as log_lmp:
+                lines = log_lmp.readlines()
+                for line in lines:
+                    if "variable T world":
+                        T = re.findall(r'\d+\.?\d*', line)[0]
+                        break
+        return T
+
     def charge_scramble(self, sequence, keep_positions=True, shuffles=1):
         charges = self.get_charge_seq(sequence=sequence)[0]
         old_charges = charges[:]
@@ -167,40 +221,47 @@ class LMP:
         #         charged_plus.append(i)
         win = np.zeros(len(sequence))
         rr = int((window-1)/2)
-        for i, aa in enumerate(sequence):
-            for j in range(-rr, rr+1):
-                if len(sequence) > i+j > 0:
-                    jaa = sequence[i+j]
-                    win[i] += self.residue_dict[jaa]["q"]
-                    #CORRECTOR
-                    # if 1 > abs(self.residue_dict[jaa]["q"]) > 0:
-                    #     win[i] += 1 - self.residue_dict[jaa]["q"]
-            win[i] /= window
+        if rr >= 0:
+            for i, aa in enumerate(sequence):
+                jaa = sequence[i]
+                win[i] += self.residue_dict[jaa]["q"]
+        else:
+            for i, aa in enumerate(sequence):
+                for j in range(-rr, rr+1):
+                    if len(sequence) > i+j > 0:
+                        jaa = sequence[i+j]
+                        win[i] += self.residue_dict[jaa]["q"]
+                        #CORRECTOR
+                        # if 1 > abs(self.residue_dict[jaa]["q"]) > 0:
+                        #     win[i] += 1 - self.residue_dict[jaa]["q"]
+                win[i] /= window
         plus = np.copy(win)
         minus = np.copy(win)
         plus[plus < 0.] = 0
         minus[minus > 0.] = 0
         return win, plus, minus
-            # if self.residue_dict[aa]["q"] < 0:
-            #     charged_minus.append(i)
-            # if self.residue_dict[aa]["q"] > 0:
-            #     charged_plus.append(i)
-        return sorted(charged_plus + charged_minus), charged_plus, charged_minus
 
     def pappu_delta(self, sequence, g=5):
         # TODO: ONLY FOR PROLINE-LESS SEQUENCES! What the hell ?
         N = len(sequence) - (g - 1)
         itot, iplus, iminus = self.get_charge_seq(sequence)
-        f_plus = len(iplus)/len(itot)
-        f_minus = len(iminus)/len(itot)
+        f_plus = np.count_nonzero(iplus > 0)/len(itot)
+        f_minus = np.count_nonzero(iminus < 0)/len(itot)
+        print(f_plus, f_minus)
+        # f_plus = np.unique(np.array(iplus), return_counts=True)[1]
+        # f_minus = np.unique(np.array(iminus), return_counts=True)[1]
+        # f_plus = len(iplus)/len(itot)
+        # f_minus = len(iminus)/len(itot)
         sigma = (f_plus - f_minus) ** 2 / (f_plus + f_minus)
         delta = 0
         for i in range(N):
             blob = sequence[i:i + g]
-            total, plus, minus = self.get_charge_seq(blob)
+            total, plus, minus = self.get_charge_seq(blob, window=1)
             if len(plus) != 0 or len(minus) != 0:
-                f_plus_i = len(plus) / (len(plus) + len(minus))
-                f_minus_i = len(minus) / (len(plus) + len(minus))
+                f_plus_i = np.count_nonzero(iplus > 0) / g
+                f_minus_i = np.count_nonzero(iminus < 0) / g
+                # print(np.count_nonzero(iplus > 0))
+                # print(f_minus_i)
                 sigma_i = (f_plus_i - f_minus_i) ** 2 / (f_plus_i + f_minus_i)
                 delta += (sigma_i - sigma) ** 2 / N
         return delta
@@ -224,13 +285,7 @@ class LMP:
                 scd += sigma_i*sigma_j*np.sqrt(np.abs(total[i]-total[j]))
         return scd/(len(sequence))
 
-    def set_sequence(self, seq, from_file=False):
-        # TODO !!
-        if from_file:
-            print("TODO")
-        self.sequence = seq
-
-    def decode_seq_from_hps(self):
+    def get_seq_from_hps(self):
         for lmp_dir in self.lmp_drs:
             data_paths = glob.glob(os.path.join(lmp_dir, "*.data"))
             data_path = data_paths[0]
@@ -291,21 +346,20 @@ class LMP:
         os.chdir(old_wd)
         return out
 
-    def get_hps_params(self):
-        for key in self.residue_dict:
-            for lam_key in definitions.lambdas:
-                if self.residue_dict[key]["name"] == lam_key:
-                    self.residue_dict[key]["lambda"] = definitions.lambdas[lam_key]
-            for sig_key in definitions.sigmas:
-                if self.residue_dict[key]["name"] == sig_key:
-                    self.residue_dict[key]["sigma"] = definitions.sigmas[sig_key]
+    def get_I_from_debye(self, debye_wv, eps=80, temperature=300):
+        sqrtI = np.sqrt(cnt.epsilon_0 * eps * cnt.Boltzmann * temperature) / ((
+                    np.sqrt(2 * 10 ** 3 * cnt.Avogadro) * cnt.e)*(1/debye_wv)*10**-10)
+        return sqrtI**2
 
     def get_hps_pairs(self, from_file=None):
+        self.get_hps_params()
         lines = ['pair_coeff          *       *       0.000000   0.000    0.000000   0.000   0.000\n']
 
         if from_file:
             lambda_gen = np.genfromtxt(from_file)
             count = 0
+        else:
+            self._get_hps_params()
         for i in range(len(self.key_ordering)):
             for j in range(i, len(self.key_ordering)):
                 res_i = self.residue_dict[self.key_ordering[i]]
@@ -324,6 +378,22 @@ class LMP:
                     i + 1, j + 1, self.hps_epsilon, sigma_ij, lambda_ij, 3 * sigma_ij, cutoff)
                 lines.append(line)
         self.hps_pairs = lines
+
+    def get_structures(self):
+        dcds = glob.glob(os.path.join(self.o_wd, '*.dcd'))
+        dcds = sorted(dcds, key=lambda x: int(re.findall(r'\d+', os.path.basename(x))[0]))
+        top = self.make_initial_frame()[0]
+        for dcd in dcds:
+            self.structure.append(md.load(dcd, top=top))
+
+    def _get_hps_params(self):
+        for key in self.residue_dict:
+            for lam_key in definitions.lambdas:
+                if self.residue_dict[key]["name"] == lam_key:
+                    self.residue_dict[key]["lambda"] = definitions.lambdas[lam_key]
+            for sig_key in definitions.sigmas:
+                if self.residue_dict[key]["name"] == sig_key:
+                    self.residue_dict[key]["sigma"] = definitions.sigmas[sig_key]
 
     # TODO : SLOW, PARALLELIZE ?
     def _temper_trj_reorder(self):
@@ -344,7 +414,7 @@ class LMP:
         # TODO : !!!!!!!!!!
         if not self.force_reorder:
             if glob.glob(os.path.join(self.o_wd, '*reorder*')):
-                print("Omitting temper reordering (reorder files already present)")
+                # print("Omitting temper reordering (reorder files already present)")
                 xtcs = glob.glob(os.path.join(self.o_wd, '*reorder*'))
                 xtcs = sorted(xtcs, key=lambda x: int(re.findall(r'\d+', os.path.basename(x))[0]))
                 return xtcs
@@ -387,7 +457,6 @@ class LMP:
         reordered_trajs = np.zeros(shape=(len(trajs), trajs[0].n_frames, trajs[0].n_atoms, 3))
         c = 0
         # TODO: Time consuming...
-        print(runner)
         for i in range(0, T_log.shape[0], runner):
             print(f'Swapping progress : {i/T_log.shape[0]*100.:.2f} %', end='\r')
             if runner != 1:
@@ -408,8 +477,10 @@ class LMP:
         for k in range(len(trajs)):
             f = f'../default_output/reorder-{k}.xtc'
             xtc_paths.append(os.path.abspath(f))
-            trajs[k].save_xtc(f)
-            shutil.copyfile(f, os.path.join(self.o_wd, f'reorder-{k}.xtc'))
+            # trajs[k].save_xtc(f)
+            trajs[k].save_lammpstrj(f)
+            # shutil.copyfile(f, os.path.join(self.o_wd, f'reorder-{k}.xtc'))
+            shutil.copyfile(f, os.path.join(self.o_wd, f'reorder-{k}.lammpstrj'))
         self.data = reordered_data
         print(reordered_data.shape)
         np.savetxt('../default_output/datareorder.lammps', reordered_data[0,:,:])

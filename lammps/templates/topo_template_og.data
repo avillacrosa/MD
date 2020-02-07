@@ -6,9 +6,9 @@
           $atom_types   atom types
            1   bond types
  
-  -$box_size       $box_size        xlo xhi
-  -$box_size       $box_size        ylo yhi
-  -$box_size       $box_size        zlo zhi
+  0       $box_size        xlo xhi
+  0       $box_size        ylo yhi
+  0       $box_size        zlo zhi
  
  Masses
 

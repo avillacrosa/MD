@@ -1,5 +1,3 @@
-# Multiprotein complexes
-
 units       real
 dimension   3
 boundary    p p p
@@ -7,11 +5,9 @@ atom_style  full
 
 bond_style  harmonic
 pair_style  ljlambda $debye 0.0 35.0
-dielectric  80.0
+dielectric  $water_perm
 
 read_data   data.data
-
-# pairwise coefficients
 
 bond_coeff          1     9.600     3.8
 
@@ -26,7 +22,7 @@ timestep      $dt
 
 velocity      all create $temp $v_seed
 fix           fxnve  all nve
-fix           fxlange all langevin $temp $temp $save $langevin_seed
+fix           fxlange all langevin $temp $temp $langevin_damp $langevin_seed
 
 compute rg all gyration
 
@@ -34,14 +30,5 @@ thermo        $save
 thermo_style  custom step pe ke temp c_rg
 thermo_modify flush yes
 
-dump          xtc_file all xtc $save xtc_traj.xtc
-dump_modify   xtc_file unwrap no
-
-dump          atom_file all atom $save atom_traj.lammpstrj
-dump_modify   atom_file flush yes
-
-dump          dcd_file all dcd $save dcd_traj.dcd
-dump_modify   dcd_file flush yes
-
-restart $restart rst.1 rst.2
-run           $t
+#rerun           $rerun_dump dump x y z
+rerun           $rerun_dump last 1000000 dump x y z

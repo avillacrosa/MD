@@ -14,21 +14,20 @@ from string import Template
 
 
 class LMPSetup(lmp.LMP):
-    def __init__(self, seq, chains=1, **kw):
+    # TODO : GENERAL, INCLUDE BACKTESTING ?
+    def __init__(self, protein, chains=1, **kw):
         super(LMPSetup, self).__init__(**kw)
-        self.p_wd = self.o_wd.replace('/perdiux', '')
-        if not os.path.isdir(self.o_wd):
-            print(f"Directory does not exist. Creating dir : {self.o_wd}")
-            os.mkdir(self.o_wd)
-        self.sequence = seq
+
+        with open(os.path.join('../data/sequences', f'{protein}.seq')) as f:
+            self.sequence = f.readlines()[0]
 
         self.temperature = 300
         self.ionic_strength = 100e-3
-        self.debye_wv = 1/self.debye_length()
         self.dt = 10.
         self.t = 100000000
         self.xyz = None
         self.n_chains = chains
+        self.protein = protein
 
         self.seq_charge = None
         self.residue_dict = dict(definitions.residues)
@@ -39,22 +38,33 @@ class LMPSetup(lmp.LMP):
         self.water_perm = 80.
         self.hps_scale = 1.0
 
-
-
         self.topo_file_dict = {}
         self.lmp_file_dict = {}
         self.qsub_file_dict = {}
 
+        self.rerun_dump = None
+        # TODO : GRACEFULLY INCORPORATE THIS ?
+        self.base_dir = f'{self.hps_scale:.1f}ls-{self.ionic_strength*1e3:.0f}I-{self.water_perm:.0f}e'
+        # TODO: MEH
+        # self.o_wd = os.path.join(self.o_wd, self.base_dir)
+        if not os.path.isdir(self.o_wd):
+            print(f"Directory does not exist. Creating dir : {self.o_wd}")
+            os.mkdir(self.o_wd)
+        self.p_wd = self.o_wd.replace('/perdiux', '')
+
         self.v_seed = 494211
         self.langevin_seed = 451618
         self.save = 50000
+        self.langevin_damp = 10000
+
+        self.debye_wv = 1/self.debye_length()
 
         #TODO : Fancy job name ?
         self.job_name = f'hps_{os.path.basename(self.o_wd)}'
         self.processors = 12
         # self.temperatures = np.linspace(150.0, 600.0, self.processors)
-        # TODO HARD CODED...
-        self.temperatures = '150.0 170.0 192.5 217.5 247.5 280.0 320.0 362.5 410.0 467.5 530.0 600.0'
+        # TODO HARD CODED... ALSO, AS AN ARRAY ?
+        self.temperatures = [300, 320, 340, 360, 380, 400]
         self.swap_every = 1000
 
     def del_missing_aas(self):
@@ -86,42 +96,6 @@ class LMPSetup(lmp.LMP):
         ordered_keys = sorted(self.residue_dict, key=lambda x: (self.residue_dict[x]['id']))
         self.key_ordering = ordered_keys
 
-    def write_hps_files(self, output_dir='default', equil=False):
-        if output_dir == 'default':
-            output_dir = self.o_wd
-
-        self._generate_lmp_input()
-        self._generate_qsub()
-        self._generate_data_input()
-
-        topo_temp_file = open('../templates/topo_template.data')
-        topo_template = Template(topo_temp_file.read())
-        topo_subst = topo_template.safe_substitute(self.topo_file_dict)
-
-        if self.temper:
-            lmp_temp_file = open('../templates/replica/input_template.lmp')
-        elif equil:
-            lmp_temp_file = open('../templates/equilibration/input_template.lmp')
-        else:
-            lmp_temp_file = open('../templates/general/input_template.lmp')
-        lmp_template = Template(lmp_temp_file.read())
-        lmp_subst = lmp_template.safe_substitute(self.lmp_file_dict)
-
-        qsub_temp_file = open('../templates/qsub_template.tmp')
-        qsub_template = Template(qsub_temp_file.read())
-        qsub_subst = qsub_template.safe_substitute(self.qsub_file_dict)
-
-        with open(f'../default_output/data.data', 'tw') as fileout:
-            fileout.write(topo_subst)
-        with open(f'../default_output/{self.job_name}.qsub', 'tw') as fileout:
-            fileout.write(qsub_subst)
-        with open(f'../default_output/lmp.lmp', 'tw') as fileout:
-            fileout.write(lmp_subst)
-
-        if output_dir is not None:
-            shutil.copyfile(f'../default_output/data.data', os.path.join(output_dir, 'data.data'))
-            shutil.copyfile(f'../default_output/{self.job_name}.qsub', os.path.join(output_dir, f'{self.job_name}.qsub'))
-            shutil.copyfile(f'../default_output/lmp.lmp', os.path.join(output_dir, 'lmp.lmp'))
 
     def get_equilibration_xyz(self, save=False, t=100000):
         lmp2pdb = '/home/adria/perdiux/src/lammps-7Aug19/tools/ch2lmp/lammps2pdb.pl'
@@ -152,11 +126,13 @@ class LMPSetup(lmp.LMP):
             print(f"-> Saving equilibration pdb at {os.path.join('../default_output', 'equilibration.pdb')}")
             traj[-1].save_pdb(os.path.join('../default_output', 'equilibration.pdb'))
 
-    def get_pdb_xyz(self, pdb):
+    def get_pdb_xyz(self, pdb, padding=0):
         struct = md.load_pdb(pdb)
         struct.center_coordinates()
         rg = md.compute_rg(struct)
-        d = rg[0] * self.n_chains ** (1 / 3) * 25
+        # TODO : Arbitrary numbers currently... make dis a function of padding strength
+        # d = rg[0] * self.n_chains ** (1 / 3) * 20
+        d = rg[0] * self.n_chains ** (1 / 3) * 8
         struct.unitcell_lengths = np.array([[d, d, d]])
 
         if self.n_chains == 1:
@@ -173,19 +149,14 @@ class LMPSetup(lmp.LMP):
                 c = 0
                 # TODO : CORRECT PADDING !
                 # padding = unitcell_d/4
-                padding = 0
                 for z in range(n_cells):
                     for y in range(n_cells):
                         for x in range(n_cells):
                             if c == self.n_chains:
                                 return adder
                             c += 1
-                            dist = [unitcell_d * (x + 1 / 2), unitcell_d * (y + 1 / 2), unitcell_d * (z + 1 / 2)]
-                            for di in range(len(dist)):
-                                if dist[di] > d/2:
-                                    dist[di] -= padding
-                                else:
-                                    dist[di] += padding
+                            dist = np.array([unitcell_d * (x + 1 / 2), unitcell_d * (y + 1 / 2), unitcell_d * (z + 1 / 2)])
+                            dist -= 0.55*(dist-d/2)
 
                             struct.xyz[0, :, :] = struct.xyz[0, :, :] + dist
                             if x + y + z == 0:
@@ -196,9 +167,93 @@ class LMPSetup(lmp.LMP):
                 return adder
             system = _build_box()
 
-            self.xyz = system.xyz*10
             self.box_size = d*10
+            self.xyz = system.xyz*10
             system.save_pdb('../default_output/double_eq.pdb')
+
+    def write_hps_files(self, output_dir='default', equil=False, rerun=False, data=True, qsub=True, lmp=True):
+        if output_dir == 'default':
+            output_dir = self.o_wd
+
+        self._generate_lmp_input()
+        self._generate_qsub()
+        self._generate_data_input()
+        self._generate_README()
+        if self.xyz is not None:
+            self._generate_pdb()
+
+        topo_temp_file = open('../templates/topo_template.data')
+        topo_template = Template(topo_temp_file.read())
+        topo_subst = topo_template.safe_substitute(self.topo_file_dict)
+
+        if self.temper:
+            lmp_temp_file = open('../templates/replica/input_template.lmp')
+        elif equil:
+            lmp_temp_file = open('../templates/equilibration/input_template.lmp')
+        elif rerun:
+            lmp_temp_file = open('../templates/rerun/input_template.lmp')
+        else:
+            lmp_temp_file = open('../templates/general/input_template.lmp')
+        lmp_template = Template(lmp_temp_file.read())
+        lmp_subst = lmp_template.safe_substitute(self.lmp_file_dict)
+
+        qsub_temp_file = open('../templates/qsub_template.tmp')
+        qsub_template = Template(qsub_temp_file.read())
+        qsub_subst = qsub_template.safe_substitute(self.qsub_file_dict)
+
+        with open(f'../default_output/data.data', 'tw') as fileout:
+            fileout.write(topo_subst)
+        with open(f'../default_output/{self.job_name}.qsub', 'tw') as fileout:
+            fileout.write(qsub_subst)
+        with open(f'../default_output/lmp.lmp', 'tw') as fileout:
+            fileout.write(lmp_subst)
+
+        if output_dir is not None:
+            if data:
+                shutil.copyfile(f'../default_output/data.data', os.path.join(output_dir, 'data.data'))
+            if qsub:
+                shutil.copyfile(f'../default_output/{self.job_name}.qsub', os.path.join(output_dir, f'{self.job_name}.qsub'))
+            if lmp:
+                shutil.copyfile(f'../default_output/lmp.lmp', os.path.join(output_dir, 'lmp.lmp'))
+
+    def assert_build(self):
+        assert self.get_eps() == self.water_perm
+        assert self.get_temperatures() == self.temperatures
+        assert self.get_ionic_strength() == self.ionic_strength
+        assert self.get_seq_from_hps() == self.sequence
+
+    def debye_length(self):
+        l = np.sqrt(cnt.epsilon_0 * self.water_perm * cnt.Boltzmann * self.temperature) / (np.sqrt(2 * self.ionic_strength * 10 ** 3 * cnt.Avogadro) * cnt.e)
+        return l
+
+    def _generate_pdb(self, display=None):
+        abc = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
+               'a','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p','q','r','s','t','u','v','w','x','y','z',
+               'A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z']
+        header = f'CRYST1     {self.box_size:.0f}     {self.box_size:.0f}     {self.box_size:.0f}     90     90     90   \n'
+        xyz = ''
+        c = 0
+        for n in range(self.n_chains):
+            for i, aa in enumerate(self.sequence):
+                coords = self.xyz[0, c, :]
+                if display:
+                    if self.residue_dict[aa]["q"] > 0:
+                        # TODO: BETTER WAY FOR THIS ?
+                        res_name = 'C' if display == 'charged' else 'P'
+                    elif self.residue_dict[aa]["q"] < 0:
+                        res_name = 'C' if display == 'charged' else 'M'
+                    else:
+                        res_name = 'N'
+                else:
+                    res_name = aa
+                # xyz += f'ATOM  {c+1:>5} {aa+str(i+1):>4}   {res_name} {abc[n]} {i+1:>3}    {coords[0]:>8.2f}{coords[1]:>8.2f}{coords[2]:>8.2f}  1.00  0.00      PROT \n'
+                xyz += f'ATOM  {c+1:>5} {res_name:>4}   {res_name} {abc[n]} {i+1:>3}    {coords[0]:>8.2f}{coords[1]:>8.2f}{coords[2]:>8.2f}  1.00  0.00      PROT \n'
+                c += 1
+            xyz += 'TER \n'
+        bottom = 'END \n'
+        with open('/home/adria/scripts/lammps/default_output/test.pdb', 'w+') as f:
+            f.write(header + xyz + bottom)
+        shutil.copyfile('/home/adria/scripts/lammps/default_output/test.pdb', os.path.join(self.o_wd, f'topo.pdb'))
 
     def _generate_lmp_input(self):
         if self.hps_pairs is None:
@@ -210,13 +265,18 @@ class LMPSetup(lmp.LMP):
         self.lmp_file_dict["v_seed"] = self.v_seed
         self.lmp_file_dict["langevin_seed"] = self.langevin_seed
         self.lmp_file_dict["temp"] = self.temperature
-        self.lmp_file_dict["temperatures"] = self.temperatures
+        self.lmp_file_dict["temperatures"] = ' '.join(map(str, self.temperatures))
         self.lmp_file_dict["water_perm"] = self.water_perm
         self.lmp_file_dict["swap_every"] = self.swap_every
         self.lmp_file_dict["save"] = self.save
-        self.lmp_file_dict["restart"] = int(self.t/10000)
-        # TODO this sucks but it is what it is
+        if int(self.t/10000) != 0:
+            self.lmp_file_dict["restart"] = int(self.t/10000)
+        else:
+            self.lmp_file_dict["restart"] = 500
+        # TODO this sucks but it is what it is, better option upstairs..
         self.lmp_file_dict["replicas"] = np.array2string(np.linspace(0, self.processors-1, self.processors, dtype='int'))[1:-1]
+        self.lmp_file_dict["rerun_dump"] = self.rerun_dump
+        self.lmp_file_dict["langevin_damp"] = self.langevin_damp
 
     def _generate_data_input(self):
         masses = []
@@ -230,8 +290,9 @@ class LMPSetup(lmp.LMP):
         spaghetti = False
 
         for chain in range(1, self.n_chains + 1):
+            #TODO CENTER SPAGHETTI BETTER...
             if self.xyz is None:
-                xyz = [-240., -240 + chain * 20, -240]
+                xyz = [240., 240 + chain * 20, 240]
                 spaghetti = True
             for aa in self.sequence:
                 if spaghetti:
@@ -254,7 +315,7 @@ class LMPSetup(lmp.LMP):
         self.topo_file_dict["masses"] = ''.join(masses)
         self.topo_file_dict["atoms"] = ''.join(atoms)
         self.topo_file_dict["bonds"] = ''.join(bonds)
-        self.topo_file_dict["box_size"] = int(self.box_size/2)
+        self.topo_file_dict["box_size"] = int(self.box_size)
 
     def _generate_qsub(self):
         self.qsub_file_dict["work_dir"] = self.p_wd
@@ -265,6 +326,15 @@ class LMPSetup(lmp.LMP):
         self.qsub_file_dict["np"] = self.processors
         self.qsub_file_dict["jobname"] = self.job_name
 
-    def debye_length(self):
-        l = np.sqrt(cnt.epsilon_0 * 80 * cnt.Boltzmann * self.temperature) / (np.sqrt(2 * self.ionic_strength * 10 ** 3 * cnt.Avogadro) * cnt.e)
-        return l
+    def _generate_slurm(self):
+        print("TODO")
+
+    def _generate_README(self):
+        with open(os.path.join(self.o_wd, 'README.txt'), 'r+') as readme:
+            readme.write(f'HPS Scale : {self.hps_scale}')
+            readme.write(f'Ionic Strength : {self.ionic_strength}')
+            readme.write(f'Medium Permittivity : {self.water_perm}')
+            readme.write(f'Protein : {self.protein}')
+            readme.write(f'Temperatures : {self.temperatures}')
+            readme.write(f'Temper : {self.temper}')
+            readme.write(f'Number of chains : {self.n_chains}')

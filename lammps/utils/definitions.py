@@ -25,13 +25,13 @@ residues = {
 }
 
 sigmas = {}
-with open('../data/sigmas.dat') as filein:
+with open('../data/hps/sigmas.dat') as filein:
     for line in filein:
         line = line.split()
         sigmas[line[0]] = float(line[1])
 
 lambdas = {}
-with open('../data/lambdas.dat') as filein:
+with open('../data/hps/lambdas.dat') as filein:
     for line in filein:
         line = line.split()
         lambdas[line[0]] = float(line[1])

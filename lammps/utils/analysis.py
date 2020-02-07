@@ -1,11 +1,14 @@
 # TODO: Solve import deficiencies (might help Pycharm)
 import lmp
 import itertools
+import shutil
 import mdtraj as md
 import math
 import scipy.constants as cnt
 import numpy as np
 import os
+import scipy
+import lmpsetup
 import re
 import time
 import datetime
@@ -27,7 +30,7 @@ class Analysis(lmp.LMP):
         self.equilibration = 3e6
         super(Analysis, self).__init__(**kw)
 
-    def distance_map(self, use='default', contacts=False):
+    def distance_map(self, use='default', contacts=False, temperature=None):
         # print("="*20, f"Calculating contact map using {use}", "="*20)
         pdbs = self.make_initial_frame()
         topo = pdbs[0]
@@ -42,6 +45,8 @@ class Analysis(lmp.LMP):
             xtcs = sorted(xtcs)
         if not xtcs:
             raise SystemError("Can't find valid trajectory files. Check that .xtc or .dcd files exist")
+        if temperature is not None:
+            xtcs = [xtcs[temperature]]
         for xtc in xtcs:
             traj = md.load(xtc, top=topo)
             # TODO: TEST FIRST PART OF IF
@@ -63,7 +68,7 @@ class Analysis(lmp.LMP):
                     dcop[d > 0.6] = 0.
                     contact_map = dcop.mean(0)
                 else:
-                    contact_map = d.mean(0)
+                    contact_map = d.mean(0) * 10
             else:
                 pool = mp.Pool()
                 ranges = np.linspace(0, traj.n_frames, mp.cpu_count() + 1, dtype='int')
@@ -74,8 +79,7 @@ class Analysis(lmp.LMP):
                                      callback=lambda x: mpi_results.append(x))
                 pool.close()
                 pool.join()
-                contact_map = np.mean(mpi_results, axis=0)
-            contact_map = contact_map * 10
+                contact_map = np.mean(mpi_results, axis=0) * 10
             contact_maps.append(contact_map)
         self.contacts = np.array(contact_maps)
         # print("="*20, "CONTACT MAP CALCULATION FINISHED", "="*20)
@@ -150,12 +154,15 @@ class Analysis(lmp.LMP):
         else:
             data = self.get_lmp_data()
         rgs = []
-        xtcs = self._temper_trj_reorder()
+        if use == 'md':
+            xtcs = self._temper_trj_reorder()
         # TODO: DEFINETELY BROKEN
         if use == 'lmp':
-            data = self.data
+            data = self.get_lmp_data()
             for run in range(data.shape[0]):
-                rg_frame = data[run, data[run, :, 0] > self.equilibration, 4]
+                # TODO INCORPORATE EQUILIBRATION EVERYWHERE
+                # rg_frame = data[run, data[run, :, 0] > self.equilibration, 4]
+                rg_frame = data[run, :, 4]
                 rgs.append(rg_frame)
         if use == 'md':
             tloads = []
@@ -173,28 +180,117 @@ class Analysis(lmp.LMP):
             #     tloads.append(tload)
         return np.array(rgs)
 
-    def get_rg_distribution(self, scikit=False):
-        rgs = self.rg_from_lmp()
-        rgs = rgs[0]
-        kde_scipy = gaussian_kde(rgs)
-        kde_scikit = KernelDensity(kernel='gaussian').fit(rgs[:, np.newaxis])
+    def minimize_I_ls(self, a_dir, b_dir, protein_a, protein_b, temp_dir='/home/adria/test/rerun/min'):
+        plus = Analysis(oliba_wd=a_dir, temper=True)
+        minus = Analysis(oliba_wd=b_dir, temper=True)
 
-        x = np.linspace(20, 40, 1000)
-        xscikit = np.linspace(20, 40, rgs.shape[0])[:, np.newaxis]
-        if scikit:
-            return kde_scikit, xscikit
-        return kde_scipy, x
+        EiA = plus.get_lmp_E()
+        EiB = minus.get_lmp_E()
 
-    def get_rg_acf(self):
-        rgs = self.rg_from_lmp()
-        rgs = rgs[0][0]
-        acf = sm.tsa.stattools.acf(rgs, nlags=1000)
-        return rgs, acf
+        def trim_warnings(f):
+            with open(f, 'r+') as file:
+                lines = file.readlines()
+                file.seek(0)
+                for line in lines:
+                    if "WARNING" not in line:
+                        file.write(line)
+                file.truncate()
 
-    def get_I_from_debye(self, debye_wv):
-        sqrtI = np.sqrt(cnt.epsilon_0 * 80 * cnt.Boltzmann * 300.) / ((
-                    np.sqrt(2 * 10 ** 3 * cnt.Avogadro) * cnt.e)*(1/debye_wv)*10**-10)
-        return sqrtI**2
+        def cost(x, T):
+            EiA = plus.get_lmp_E()
+
+            nframes = 201
+
+            I = x[0]
+            ls = x[1]
+            shutil.copyfile(os.path.join(a_dir, 'data.data'), os.path.join(temp_dir, 'data.data'))
+            shutil.copyfile(os.path.join(a_dir, f'atom_traj_{T}.lammpstrj'), os.path.join(temp_dir, 'atom_traj.lammpstrj'))
+            costerA = lmpsetup.LMPSetup(oliba_wd=temp_dir, protein=protein_a)
+            costerA.ionic_strength = I
+            costerA.hps_scale = ls
+            costerA.save = 500
+            costerA.box_size = 5000
+            costerA.get_hps_params()
+            costerA.get_hps_pairs()
+            costerA.rerun_dump = 'atom_traj.lammpstrj'
+            costerA.get_pdb_xyz(pdb='/home/adria/scripts/lammps/data/equil/12D_CPEB4_D4.pdb', padding=15)
+            costerA.write_hps_files(rerun=True, data=False)
+            costerA.run(file=os.path.join(temp_dir, 'lmp.lmp'), n_cores=8)
+            trim_warnings(os.path.join(temp_dir, 'log.lammps'))
+            EA = costerA.get_lmp_E()[:, :nframes, 0]
+            a = Analysis(oliba_wd=temp_dir)
+            rgA = md.compute_rg(md.load(f'/home/adria/test/rerun/12D4/dcd_traj_{T}.dcd', top='/home/adria/test/rerun/12D4/data_trj.pdb'))
+            rgA = np.array([rgA[:nframes]])
+            print("PREA", rgA.mean())
+            EiA = EiA[0, :EA.shape[1], 0]
+            wsA = a.weights(Ei=EiA, Ef=EA, T=300)
+            wsA = wsA/np.sum(wsA)
+            rgA = np.dot(rgA, wsA.T)
+
+            EiB = minus.get_lmp_E()
+            I = x[0]
+            ls = x[1]
+            shutil.copyfile(os.path.join(b_dir, 'data.data'), os.path.join(temp_dir, 'data.data'))
+            shutil.copyfile(os.path.join(b_dir, f'atom_traj_{T}.lammpstrj'), os.path.join(temp_dir, 'atom_traj.lammpstrj'))
+            costerB = lmpsetup.LMPSetup(oliba_wd=temp_dir, protein=protein_a)
+            costerB.ionic_strength = I
+            costerB.hps_scale = ls
+            costerB.save = 500
+            costerB.box_size = 5000
+            costerB.get_hps_params()
+            costerB.get_hps_pairs()
+            costerB.rerun_dump = 'atom_traj.lammpstrj'
+            costerB.get_pdb_xyz(pdb='/home/adria/scripts/lammps/data/equil/CPEB4_D4.pdb', padding=15)
+            costerB.write_hps_files(rerun=True, data=True)
+            costerB.run(file=os.path.join(temp_dir, 'lmp.lmp'), n_cores=8)
+            trim_warnings(os.path.join(temp_dir, 'log.lammps'))
+            EB = costerB.get_lmp_E()[:, :nframes, 0]
+            b = Analysis(oliba_wd=temp_dir)
+            rgB = md.compute_rg(
+                md.load(f'/home/adria/test/rerun/D4/dcd_traj_{T}.dcd', top='/home/adria/test/rerun/D4/data_trj.pdb'))
+            rgB = np.array([rgB[:nframes]])
+            print("PREB", rgB.mean())
+            EiB = EiB[0, :EB.shape[1], 0]
+            wsB = b.weights(Ei=EiB, Ef=EB, T=300)
+            wsB = wsB / np.sum(wsB)
+            rgB = np.dot(rgB, wsB.T)
+
+            rgA = rgA[0][0]
+            rgB = rgB[0][0]
+            c = rgA - rgB + (rgB - 21 + rgA - 21)**2 + ls-1
+            print("POST A", rgA, "POST B", rgB)
+            print("For ", x)
+            return c
+
+        T = (0)
+        x0 = np.array([200e-3, 1.0])
+        m = scipy.optimize.minimize(fun=cost, x0=x0, args=T)
+        return m
+
+    def weights(self, Ei, Ef, T):
+        # ENERGIES IN LMP IS IN KCAL/MOL (1 KCAL = 4184J)
+        kb = cnt.Boltzmann*cnt.Avogadro/4184
+        w = np.exp(-(Ef-Ei)/(kb*T))
+        return w
+
+    # def get_rg_distribution(self, scikit=False):
+    #     rgs = self.rg_from_lmp()
+    #     rgs = rgs[0]
+    #     kde_scipy = gaussian_kde(rgs)
+    #     kde_scikit = KernelDensity(kernel='gaussian').fit(rgs[:, np.newaxis])
+    #
+    #     x = np.linspace(20, 40, 1000)
+    #     xscikit = np.linspace(20, 40, rgs.shape[0])[:, np.newaxis]
+    #     if scikit:
+    #         return kde_scikit, xscikit
+    #     return kde_scipy, x
+    #
+    # def get_rg_acf(self):
+    #     rgs = self.rg_from_lmp()
+    #     rgs = rgs[0][0]
+    #     acf = sm.tsa.stattools.acf(rgs, nlags=1000)
+    #     return rgs, acf
+
 
 
 mpi_results = []
