@@ -29,19 +29,13 @@ class LMP:
 
         self.lmp = '/home/adria/local/lammps/bin/lmp'
         self.lmp_drs = self.get_lmp_dirs()
-        self.n_drs = len(self.lmp_drs)
 
         self.hps_epsilon = 0.2
         self.hps_pairs = None
 
         self.structures = None
-        # if temper:
-        #     self.data = self.get_lmp_temper_data()
-        # else:
-        # self.data = self.get_lmp_data()
         self.data = None
         self.lmp2pdb = '/home/adria/perdiux/src/lammps-7Aug19/tools/ch2lmp/lammps2pdb.pl'
-        self.re_reorder = '/home/adria/local/bin/reorder_remd_traj.py'
 
     def get_lmp_dirs(self, path=None):
         if path is None:
@@ -178,15 +172,36 @@ class LMP:
             print("TODO IF NOT TEMPER")
             return
         lmp_path = glob.glob(os.path.join(self.o_wd, '*.lmp'))
+        T = []
         if lmp_path:
             with open(lmp_path[0], 'r') as log_lmp:
                 lines = log_lmp.readlines()
                 for line in lines:
-                    if "variable T world":
-                        T = re.findall(r'\d+\.?\d*', line)[0]
+                    if "variable T world" in line:
+                        T = re.findall(r'\d+\.?\d*', line)
                         break
-        return T
+        return np.array(T, dtype=float)
 
+    # TODO : TEST
+    def get_n_chains(self):
+        lmp_data = glob.glob(os.path.join(self.o_wd, '*.data'))
+        unit_atoms, n_atoms = 0, 0
+        if lmp_data:
+            with open(lmp_data[0], 'r') as data:
+                lines = data.readlines()
+                for line in lines:
+                    print(line)
+                    if 'atoms' in line:
+                        unit_atoms = re.findall(r'\d+', line)
+                    if 'Atoms' in line:
+                        reading_lines = True
+                    if reading_lines and line != '':
+                        n_atoms += 1
+                        if 'Bonds' in line:
+                            reading_lines = False
+        return int(n_atoms/unit_atoms)
+
+    # TODO : Maybe this at LMPSETUP???
     def charge_scramble(self, sequence, keep_positions=True, shuffles=1):
         charges = self.get_charge_seq(sequence=sequence)[0]
         old_charges = charges[:]
@@ -326,8 +341,8 @@ class LMP:
             for atom in atoms:
                 seq.append(mass_dict[atom[2]])
             seq_str = ''.join(seq)
-            print(
-                "Finding used sequence. Note that Isoleucine and Leucine have the same exact HPS parameters. Therefore, they are not distinguishable.")
+            # print(
+            #     "Finding used sequence. Note that Isoleucine and Leucine have the same exact HPS parameters. Therefore, they are not distinguishable.")
             return seq_str
 
     def run(self, file, n_cores=1):
@@ -352,7 +367,7 @@ class LMP:
         return sqrtI**2
 
     def get_hps_pairs(self, from_file=None):
-        self.get_hps_params()
+        self._get_hps_params()
         lines = ['pair_coeff          *       *       0.000000   0.000    0.000000   0.000   0.000\n']
 
         if from_file:
@@ -379,6 +394,7 @@ class LMP:
                 lines.append(line)
         self.hps_pairs = lines
 
+    # TODO : ...
     def get_structures(self):
         dcds = glob.glob(os.path.join(self.o_wd, '*.dcd'))
         dcds = sorted(dcds, key=lambda x: int(re.findall(r'\d+', os.path.basename(x))[0]))

@@ -113,7 +113,8 @@ class MultiFitAlphas():
             return
 
         err = 0
-        w = self.get_w(alphas)
+        w = self.work\
+            (alphas)
         for idx, weight in enumerate(w):
             rg = self.rg[idx][self.temperature_index]
             rg = np.dot(rg, weight)

@@ -4,6 +4,7 @@ import glob
 import re
 import pandas as pd
 import numpy as np
+import pathlib
 from scipy import stats
 import matplotlib.pyplot as plt
 
@@ -22,8 +23,18 @@ class Plotter(analysis.Analysis):
         self.style = None
         self.title_fsize = 20
         self.label_fsize = 16
+        self.ticks_fsize = 14
         # TODO HARD CODED...
-        self.temperatures = [150.0, 170.0, 192.5, 217.5, 247.5, 280.0, 320.0, 362.5, 410.0, 467.5, 530.0, 600.0]
+        self.temperatures = None
+
+        # Observables for convenience
+        self.flory = None
+        # TODO : SWAP NAMES BETWEEN THIS AND THE PROCESS ?
+        self.gyration = None
+        self.contact_map = None
+        self.distant_map = None
+
+        self.observables = ['rg', 'distance_map', 'contact_map', 'dij', 'flory', 'charge']
         # pl = self
         # self.observables = {
         #     'rg': pl.rg,
@@ -32,78 +43,11 @@ class Plotter(analysis.Analysis):
         #     'dij': pl.plot_dijs
         # }
 
-    # Main Function
-    def plot(self, observable, protein, eps, I, ls, protein2=None, sequence=None, temperature=4, label=None, style=None):
-        if label:
-            self.label = label
-        else:
-            self.label = f'{self.protein}, I = {I:.0f}, ε = {eps:.0f} HPS = {ls:.1f}'
-        self.style = '-'
-        if style:
-            self.style = style
-
-        if not self.figure or observable in ['distance_map', 'contact_map']:
-            self.figure, self.axis = plt.subplots(figsize=(16, 12), sharex=True)
-        # TODO Smarter way to do this? Dictionary, but then self is the dict... Maybe external var like plotter = self
-        if observable not in ['rg', 'distance_map', 'contact_map', 'dij', 'flory', 'charge']:
-            print("Observable not found. Available ones are :")
-            print(['rg', 'distance_map', 'contact_map', 'dij', 'flory', 'charge'])
-            return
-        df = self.index
-        df2 = df.copy()
-        df = df.loc[df['Protein'] == protein]
-        df = df.loc[df['Eps'] == eps]
-        df = df.loc[df['Scale'] == ls]
-        df = df.loc[df['I'] == I]
-
-
-        fout = f'{ls:.1f}ls-{I:.0f}I-{eps:.0f}e.txt'
-        d = os.path.join(self.oliba_data_dir, observable, fout)
-        if os.path.exists(d):
-            self.obs_data = np.genfromtxt(d)
-
-        # TODO BETTER WAY FOR THIS ???
-        # TODO : Maybe pass metaobject to plot ?
-        self.o_wd = df.to_numpy()[0][-1]
-        self.protein = protein
-        # TODO : IS IT REALLY NECESSARY ?
-        self.lmp_drs = self.get_lmp_dirs()
-
-        o_wd2 = None
-        if protein2:
-            df2 = df2.loc[df2['Protein'] == protein2]
-            df2 = df2.loc[df2['Eps'] == eps]
-            df2 = df2.loc[df2['Scale'] == ls]
-            df2 = df2.loc[df2['I'] == I]
-            o_wd2 = df2.to_numpy()[0][-1]
-            print(self.o_wd, o_wd2)
-
-        if observable == 'rg':
-            data = self.plot_rg()
-        if observable == 'distance_map':
-            if o_wd2:
-                data = self.plot_distance_map(sequence, temperature=temperature, b=o_wd2)
-            else:
-                data = self.plot_distance_map(sequence, temperature=temperature)
-        if observable == 'contact_map':
-            if o_wd2:
-            # data = self.plot_distance_map(sequence, contacts=True, temperature=5)
-                data = self.plot_distance_map(sequence, contacts=True, temperature=temperature, b=o_wd2)
-            else:
-                data = self.plot_distance_map(sequence, contacts=True, temperature=temperature)
-        if observable == 'dij':
-            data = self.plot_dijs(plot_flory_fit=True, plot_ideal_fit=False)
-        if observable == 'flory':
-            data = self.plot_flory()
-        if observable == 'charge':
-            data = self.plot_q_distr(sequence=sequence)
-        self.axis.legend()
-        if self.obs_data is not None:
-            np.savetxt(d, data)
-
-    def make_index(self, force_update=False):
+    def make_index(self, force_update=True):
         if os.path.exists('../data/index.txt') and not force_update:
-            return pd.read_csv('../data/index.txt', sep=' ', index_col=0)
+            df = pd.read_csv('../data/index.txt', sep=' ', index_col=0)
+            print(df)
+            return df
         lmp_dirs = self.get_lmp_dirs(self.oliba_prod_dir)
         df = pd.DataFrame({
             'Protein': 'none',
@@ -123,7 +67,7 @@ class Plotter(analysis.Analysis):
             eps, I, scale = None, None, None
             lj_lambda_line = None
             lmp_path = glob.glob(os.path.join(d, '*.lmp'))
-            self.get_hps_params()
+            self._get_hps_params()
             if lmp_path:
                 log_lmp = open(lmp_path[0], 'r')
                 lines = log_lmp.readlines()
@@ -132,7 +76,7 @@ class Plotter(analysis.Analysis):
                         continue
                     if "dielectric" in line:
                         eps = re.findall(r'\d+', line)[0]
-                        epss.append(eps)
+                        epss.append(float(eps))
                     if "ljlambda" in line:
                         lj_lambda_line = line
                     if lj_lambda_line and eps:
@@ -162,8 +106,80 @@ class Plotter(analysis.Analysis):
         df.to_csv('../data/index.txt', sep=' ', mode='w')
         return df
 
-    def plot_distance_map(self, sequence, b=None, contacts=False, temperature=None):
+    # TODO : TOO MANY ARGUMENTS... think of another possibility ?
+    def plot(self, observable, protein, eps, I, ls, protein2=None, sequence=None, temperature=4, label=None, style=None):
+        # TODO : SEQUENCE HAS TO BE EXPLICIT, MAYBE CAN BE IMPLICIT
+        self.obs_data = None
+        if label:
+            self.label = label
+        else:
+            self.label = f'{self.protein}, I = {I:.0f}, ε = {eps:.0f} HPS = {ls:.1f}'
+        self.style = '-'
+        if style:
+            self.style = style
 
+        # if not self.figure or observable in ['distance_map', 'contact_map']:
+        self.figure, self.axis = plt.subplots(figsize=(16, 12), sharex=True)
+        if observable not in self.observables:
+            print(f"Observable not found. Available ones are : {self.observables}")
+            return
+        df = self.index
+        df2 = df.copy()
+        df = df.loc[df['Protein'] == protein]
+        df = df.loc[df['Eps'] == eps]
+        df = df.loc[df['Scale'] == ls]
+        df = df.loc[df['I'] == I]
+
+        fout = f'{ls:.1f}ls-{I:.0f}I-{eps:.0f}e'
+        d = os.path.join(self.oliba_data_dir, observable, protein, fout)
+        if os.path.exists(d):
+            print("Requested data already available")
+            self.obs_data = np.genfromtxt(os.path.join(d,'data.txt'))
+
+        # TODO BETTER WAY FOR THIS ???
+        # TODO : Maybe pass metaobject to plot ?
+        self.o_wd = df.to_numpy()[0][-1]
+        # TODO : TOO LATE TO DO THIS ?
+        self.temperatures = self.get_temperatures()
+        self.protein = protein
+        # TODO : IS IT REALLY NECESSARY ?
+        self.lmp_drs = self.get_lmp_dirs()
+
+        o_wd2 = None
+        if protein2:
+            df2 = df2.loc[df2['Protein'] == protein2]
+            df2 = df2.loc[df2['Eps'] == eps]
+            df2 = df2.loc[df2['Scale'] == ls]
+            df2 = df2.loc[df2['I'] == I]
+            o_wd2 = df2.to_numpy()[0][-1]
+        if observable == 'rg':
+            data = self.plot_rg()
+        if observable == 'distance_map':
+            if o_wd2:
+                data = self.plot_distance_map(sequence, temperature=temperature, b=o_wd2, double=True)
+            else:
+                data = self.plot_distance_map(sequence, temperature=temperature)
+        if observable == 'contact_map':
+            if o_wd2:
+                data = self.plot_distance_map(sequence, contacts=True, temperature=temperature, b=o_wd2, double=True)
+            else:
+                data = self.plot_distance_map(sequence, contacts=True, temperature=temperature)
+        if observable == 'dij':
+            data = self.plot_dijs(plot_flory_fit=True, plot_ideal_fit=False)
+        if observable == 'flory':
+            data = self.plot_flory()
+        if observable == 'charge':
+            data = self.plot_q_distr(sequence=sequence)
+        self.axis.legend(fontsize=self.label_fsize)
+        self.axis.xaxis.set_tick_params(labelsize=self.ticks_fsize)
+        self.axis.yaxis.set_tick_params(labelsize=self.ticks_fsize)
+        if self.obs_data is None:
+            pathlib.Path(d).mkdir(parents=True, exist_ok=True)
+            print("Saving data")
+            np.savetxt(os.path.join(d, 'data.txt'), data)
+        return
+
+    def plot_distance_map(self, sequence, b=None, contacts=False, temperature=None, double=False):
         if self.obs_data is not None:
             cont_map = self.obs_data
         else:
@@ -173,20 +189,31 @@ class Plotter(analysis.Analysis):
 
         if b:
             B = analysis.Analysis(oliba_wd=b, temper=self.temper)
-            B_contacts = B.distance_map(use='md')
+            B_contacts = B.distance_map(use='md', contacts=contacts, temperature=temperature)
             # TODO: FIX! OTHER WAY AROUND...
-            print(b, self.o_wd)
-            cont_map = cont_map - B_contacts
+            if not double:
+                cont_map = cont_map - B_contacts
             cmap = 'PRGn'
 
         if temperature:
-            T = temperature
             distance_map = cont_map[0]
-            distance_map.max()
-            img = self.axis.imshow(distance_map, cmap=cmap)
+            # distance_map.max()
+            # TODO : BETTER THIS
+            if double and b:
+                bcont = np.array(B_contacts[0])
+                distance_map[np.triu_indices_from(distance_map)] = bcont[np.triu_indices_from(bcont)]
+                print(distance_map)
+                # distance_map[np.triu_indices_from(distance_map)] = bcont[np.triu_indices_from(bcont)]
+                cmap = 'plasma'
+                img = self.axis.imshow(distance_map, cmap=cmap)
+            elif b:
+                cmap = 'PRGn'
+                img = self.axis.imshow(distance_map, cmap=cmap, vmin=-np.max(distance_map), vmax=np.max(distance_map))
+            else:
+                cmap = 'plasma'
+                img = self.axis.imshow(distance_map, cmap=cmap)
             self.figure.subplots_adjust(left=0, right=1)
             self.axis.set_adjustable('box')
-            # fig.tight_layout(pad=0)
             self.axis.invert_yaxis()
 
             q_total, q_plus, q_minus = self.get_charge_seq(sequence)
@@ -202,7 +229,9 @@ class Plotter(analysis.Analysis):
         else:
             for T in range(len(cont_map)):
                 distance_map = cont_map[T, :, :]
-                img = self.axis.imshow(distance_map, cmap=cmap, vmin=-10., vmax=10.)
+                if double and b:
+                    distance_map[np.triu_indices_from(distance_map)] = B_contacts[T]
+                img = self.axis.imshow(distance_map, cmap=cmap, vmin=-np.max(distance_map), vmax=np.max(distance_map))
                 # img = self.axis.imshow(distance_map, cmap=cmap, vmin=0., vmax=0.2)
                 self.figure.subplots_adjust(left=0, right=1)
                 self.axis.invert_yaxis()
@@ -219,55 +248,90 @@ class Plotter(analysis.Analysis):
                 cb.set_label('$\mathregular{d_{ij}}$', fontsize=20)
                 cb.ax.tick_params(labelsize=16)
         self.axis.set_adjustable('box', True)
-
         return distance_map
 
-    def plot_dijs(self, plot_flory_fit=False, plot_ideal_fit=False):
+    def plot_dijs(self, r0=5.5, plot_flory_fit=False, plot_ideal_fit=False):
         ijs, means = self.ij_from_contacts(use='md')
-        # TODO: HARDCODED 5.5...
-        florys = self.flory_scaling_fit(use='md', r0=5.5, ijs=[ijs, means])[0]
+        if plot_flory_fit:
+            florys = self.flory_scaling_fit(use='md', r0=r0, ijs=[ijs, means])[0]
 
         self.axis.set_xlabel("|i-j|")
         self.axis.set_ylabel(r'dij ($\AA$)')
         for i in range(ijs.shape[0]):
-            flory = florys[i]
             ij = ijs[i, :]
             mean = means[i, :]
             if plot_flory_fit:
-                self.axis.plot(ij, 5.5 * np.array(ij) ** flory, '--', label=f"Fit to 5.5*N^{flory:.3f}")
+                flory = florys[i]
+                self.axis.plot(ij, r0 * np.array(ij) ** flory, '--', label=f"Fit to {r0:.1f}*N^{flory:.3f}")
             if plot_ideal_fit:
-                self.axis.plot(ij, np.array(ij) ** 0.5 * 5.5, '--', label="Random Coil Scaling (5.5*N^0.5)")
+                self.axis.plot(ij, np.array(ij) ** 0.5 * r0, '--', label="Random Coil Scaling (5.5*N^0.5)")
             self.axis.plot(ij, mean, label="HPS results")
         fout = f'../default_output/test.png'
         self.axis.savefig(fout)
         return ijs, means
 
     def plot_rg(self):
-        if self.obs_data:
+        if self.obs_data is not None:
             rg = self.obs_data
         else:
             rg = self.rg(use='md')
-        self.axis.set_ylabel("Rg (Ang)")
-        # TODO : Actual temperatures on x axis
-        self.axis.set_xlabel("T (K)")
+        err_bars = self.block_error(observable=rg)
+        self.axis.set_ylabel(r"Rg ($\AA$)", fontsize=self.label_fsize)
+        self.axis.set_xlabel("T (K)", fontsize=self.label_fsize)
         self.axis.plot(self.temperatures, rg.mean(axis=1), self.style, label=self.label)
+        if self.flory:
+            Tc = self.find_Tc(florys=self.flory)
+            idx_sup = np.where(self.temperatures == Tc)[0][0]+1
+            idx_inf = np.where(self.temperatures == Tc)[0][0]-1
+            slope = (rg[:, idx_sup] - rg[:, idx_inf])/(self.temperatures[idx_sup] - self.temperatures[idx_inf])
+            intersect = rg[:, idx_sup] - slope*self.temperatures[:, idx_sup]
+            rgC = slope*Tc + intersect
+            self.axis.axvline(Tc, '--', label="T Critical")
+            self.axis.set_xticks(np.append(self.axis.get_xticks, Tc))
+            self.axis.axhline(rgC, '--', label="Rg Critical")
+            self.axis.set_yticks(np.append(self.axis.get_yticks, rgC))
+        pline, capline, barline = self.axis.errorbar(self.temperatures, rg.mean(axis=1), yerr=err_bars, uplims=True, lolims=True)
+        capline[0].set_marker('_')
+        capline[0].set_markersize(10)
+        capline[1].set_marker('_')
+        capline[1].set_markersize(10)
+        self.gyration = rg
         return rg
 
     def plot_flory(self, r0=5.5):
-        if self.obs_data:
-            florys = self.obs_data
+        if self.obs_data is not None:
+            # TODO : RECALCULATE ERR INSTEAD OF SAVING ?
+            florys, r0s, err = self.obs_data
         else:
-            florys = self.flory_scaling_fit(use='md', r0=r0)
-        self.axis.set_ylabel('\u03BD')
-        self.axis.set_xlabel("T (K)")
-        self.axis.plot(self.temperatures, florys[0], self.style, label=self.label)
-        return florys
+            florys, r0s, err = self.flory_scaling_fit(use='md', r0=r0)
+        self.axis.set_ylabel('\u03BD', fontsize=self.label_fsize)
+        self.axis.set_xlabel("T (K)", fontsize=self.label_fsize)
+        self.axis.set_ylim(0.3, 0.65)
+        self.axis.axhspan(0.5, 0.65, color="green", alpha=0.08)
+        self.axis.axhspan(0.3, 0.5, color="red", alpha=0.08)
+        good_line = self.axis.axhline(3/5, ls='--', color='green')
+        bad_line = self.axis.axhline(1/3, ls='--', color="red")
+        leg = self.axis.legend([good_line, bad_line], ["Good Solvent", "Poor Solvent"], loc=2, fontsize=self.label_fsize)
+        self.axis.plot(self.temperatures, florys, self.style, label=self.label)
+        Tc = self.find_Tc(florys=florys)
+        self.axis.axvline(Tc, ls='--', label='T Critical', alpha=0.4)
+        self.axis.set_xticks(np.append(self.axis.get_xticks(), Tc))
+
+        pline, capline, barline = self.axis.errorbar(self.temperatures, florys, yerr=err, uplims=True, lolims=True)
+        capline[0].set_marker('_')
+        capline[0].set_markersize(10)
+        capline[1].set_marker('_')
+        capline[1].set_markersize(10)
+        self.axis.add_artist(leg)
+        self.flory = florys
+        return np.array([florys, r0s, err])
 
     def plot_q_distr(self, sequence, window=9):
         total, plus, minus = self.get_charge_seq(sequence=sequence, window=window)
         self.axis.stem(plus, markerfmt=' ', use_line_collection=True, linefmt='blue', basefmt='')
         self.axis.stem(minus, markerfmt=' ', use_line_collection=True, linefmt='red', basefmt='')
         self.axis.set_ylim(-0.6, 0.6)
+        return total
 
     def plot_E_ensemble(self):
         # TODO INTEGRATE TO PLOT FUNCTION
@@ -287,6 +351,7 @@ class Plotter(analysis.Analysis):
             self.axis.plot(x, kde_scipy(x))
         self.axis.legend()
 
+    # TODO !!!! Still need to be translated, but they are pretty niche atm !!!!
     def plot_gaussian_kde(dir, equil=3000):
         rgs, Is = calc.rg_from_lmp(dir, equil)
         rgs = rgs[0]

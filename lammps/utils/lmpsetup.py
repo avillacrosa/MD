@@ -47,9 +47,7 @@ class LMPSetup(lmp.LMP):
         self.base_dir = f'{self.hps_scale:.1f}ls-{self.ionic_strength*1e3:.0f}I-{self.water_perm:.0f}e'
         # TODO: MEH
         # self.o_wd = os.path.join(self.o_wd, self.base_dir)
-        if not os.path.isdir(self.o_wd):
-            print(f"Directory does not exist. Creating dir : {self.o_wd}")
-            os.mkdir(self.o_wd)
+
         self.p_wd = self.o_wd.replace('/perdiux', '')
 
         self.v_seed = 494211
@@ -96,13 +94,11 @@ class LMPSetup(lmp.LMP):
         ordered_keys = sorted(self.residue_dict, key=lambda x: (self.residue_dict[x]['id']))
         self.key_ordering = ordered_keys
 
-
     def get_equilibration_xyz(self, save=False, t=100000):
         lmp2pdb = '/home/adria/perdiux/src/lammps-7Aug19/tools/ch2lmp/lammps2pdb.pl'
         meta_maker = LMPSetup(oliba_wd='../default_output', seq=self.sequence)
         meta_maker.t = t
         # meta_maker.del_missing_aas()
-        meta_maker.get_hps_params()
         meta_maker.get_hps_pairs()
         meta_maker.write_hps_files(output_dir=None, equil=True)
         meta_maker.run('lmp.lmp', n_cores=8)
@@ -172,6 +168,22 @@ class LMPSetup(lmp.LMP):
             system.save_pdb('../default_output/double_eq.pdb')
 
     def write_hps_files(self, output_dir='default', equil=False, rerun=False, data=True, qsub=True, lmp=True):
+        self.base_dir = f'{self.hps_scale:.1f}ls-{self.ionic_strength*1e3:.0f}I-{self.water_perm:.0f}e'
+        self.o_wd = os.path.join(self.o_wd, f'x{self.n_chains}')
+        if not os.path.isdir(self.o_wd):
+            os.mkdir(self.o_wd)
+            self.o_wd = os.path.join(self.o_wd, self.base_dir)
+            if not os.path.isdir(self.o_wd):
+                os.mkdir(self.o_wd)
+                print(f"Directory does not exist. Creating dir : {self.o_wd}")
+            else:
+                self.o_wd = os.path.join(self.o_wd, self.base_dir)
+        else:
+            self.o_wd = os.path.join(self.o_wd, self.base_dir)
+            if not os.path.isdir(self.o_wd):
+                os.mkdir(self.o_wd)
+                print(f"Directory does not exist. Creating dir : {self.o_wd}")
+
         if output_dir == 'default':
             output_dir = self.o_wd
 
@@ -217,10 +229,12 @@ class LMPSetup(lmp.LMP):
                 shutil.copyfile(f'../default_output/lmp.lmp', os.path.join(output_dir, 'lmp.lmp'))
 
     def assert_build(self):
-        assert self.get_eps() == self.water_perm
-        assert self.get_temperatures() == self.temperatures
-        assert self.get_ionic_strength() == self.ionic_strength
-        assert self.get_seq_from_hps() == self.sequence
+        asserter = lmp.LMP(oliba_wd=self.o_wd, temper=True)
+        assert int(asserter.get_eps()) == int(self.water_perm)
+        assert asserter.get_temperatures() == list(map(str,self.temperatures))
+        assert asserter.get_ionic_strength() == self.ionic_strength
+        assert asserter.get_seq_from_hps().replace('L', 'I') == self.sequence.replace('L', 'I')
+        print("Assertion complete")
 
     def debye_length(self):
         l = np.sqrt(cnt.epsilon_0 * self.water_perm * cnt.Boltzmann * self.temperature) / (np.sqrt(2 * self.ionic_strength * 10 ** 3 * cnt.Avogadro) * cnt.e)
@@ -326,15 +340,21 @@ class LMPSetup(lmp.LMP):
         self.qsub_file_dict["np"] = self.processors
         self.qsub_file_dict["jobname"] = self.job_name
 
+    # TODO : !
+    def _generate_restart(self):
+        print("TODO")
+
+    # TODO : !
     def _generate_slurm(self):
         print("TODO")
 
     def _generate_README(self):
-        with open(os.path.join(self.o_wd, 'README.txt'), 'r+') as readme:
-            readme.write(f'HPS Scale : {self.hps_scale}')
-            readme.write(f'Ionic Strength : {self.ionic_strength}')
-            readme.write(f'Medium Permittivity : {self.water_perm}')
-            readme.write(f'Protein : {self.protein}')
-            readme.write(f'Temperatures : {self.temperatures}')
-            readme.write(f'Temper : {self.temper}')
-            readme.write(f'Number of chains : {self.n_chains}')
+        with open(os.path.join(self.o_wd, 'README.txt'), 'tw') as readme:
+            readme.write(f'HPS Scale : {self.hps_scale} \n')
+            readme.write(f'Ionic Strength : {self.ionic_strength} \n')
+            readme.write(f'Medium Permittivity : {self.water_perm} \n')
+            readme.write(f'Protein : {self.protein} \n')
+            readme.write(f'Temperatures : {self.temperatures} \n')
+            readme.write(f'Temper : {self.temper} \n')
+            readme.write(f'Number of chains : {self.n_chains} \n')
+            readme.write(f'Langevin Damp : {self.langevin_damp} \n')

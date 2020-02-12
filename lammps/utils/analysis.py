@@ -30,7 +30,7 @@ class Analysis(lmp.LMP):
         self.equilibration = 3e6
         super(Analysis, self).__init__(**kw)
 
-    def distance_map(self, use='default', contacts=False, temperature=None):
+    def distance_map(self, use='md', contacts=False, temperature=None):
         # print("="*20, f"Calculating contact map using {use}", "="*20)
         pdbs = self.make_initial_frame()
         topo = pdbs[0]
@@ -85,7 +85,7 @@ class Analysis(lmp.LMP):
         # print("="*20, "CONTACT MAP CALCULATION FINISHED", "="*20)
         return contact_maps
 
-    def ij_from_contacts(self, use='default', contacts=None):
+    def ij_from_contacts(self, use='md', contacts=None):
         # print("="*20, f"Calculating ij from contact map using {use}", "="*20)
         if contacts is None:
             self.distance_map(use=use)
@@ -105,14 +105,14 @@ class Analysis(lmp.LMP):
         # print("="*20, "D_IJ FROM CONTACT MAP CALCULATION FINISHED", "="*20)
         return np.array(tot_ijs), np.array(tot_means)
 
-    def flory_scaling_fit(self, r0=None, use='default', ijs=None):
+    def flory_scaling_fit(self, r0=None, use='md', ijs=None):
         # print("="*20, f"Starting flory exponent calculation for R0 = {r0} using {use}", "="*20)
         if ijs is None:
             tot_ijs, tot_means = self.ij_from_contacts(use=use)
         else:
             # TODO : DANGEROUS...
             tot_ijs, tot_means = ijs[0], ijs[1]
-        florys, r0s = [], []
+        florys, r0s, covs = [], [], []
         for i, ij in enumerate(tot_ijs):
             mean = tot_means[i]
             if r0 is None:
@@ -125,8 +125,9 @@ class Analysis(lmp.LMP):
                 fit_r0 = r0
             florys.append(fit_flory)
             r0s.append(fit_r0)
+            covs.append(np.sqrt(np.diag(fitv)))
         # print("="*20, "FLORY EXPONENT CALCULATION FINISHED", "="*20)
-        return np.array(florys), np.array(r0s)
+        return np.array(florys), np.array(r0s), np.array(covs)[:,0]
 
     def distance_map_by_residue(self):
         contacts = self.contacts
@@ -148,7 +149,10 @@ class Analysis(lmp.LMP):
 
         return saver, dict_res_translator
 
-    def rg(self, use='lmp'):
+    def rg(self, use='md'):
+        # n_chains = self.get_n_chains()
+        # TODO : HOTFIX
+        n_chains = 1
         if self.temper:
             data = self.get_lmp_temper_data()
         else:
@@ -165,11 +169,22 @@ class Analysis(lmp.LMP):
                 rg_frame = data[run, :, 4]
                 rgs.append(rg_frame)
         if use == 'md':
-            tloads = []
+            """ Only this case seems to work for multichain ! """
             topo = self.make_initial_frame()[0]
             for xtc in xtcs:
                 tload = md.load(xtc, top=topo)
-                rg = md.compute_rg(tload)*10.
+                # TODO : TEST
+                if n_chains != 1:
+                    rg = 0
+                    for chain in range(n_chains):
+                        tr = tload[:]
+                        atom_slice = slice(chain*tr.n_atoms, (chain+1)*tr.n_atoms)
+                        print(atom_slice)
+                        tr.atom_slice(atom_slice)
+                        rg += md.compute_rg(tr)
+                    rg = rg/n_chains*10.
+                else:
+                    rg = md.compute_rg(tload)*10.
                 rgs.append(rg)
             # for dir in self.lmp_drs:
             #     traj = os.path.join(dir, 'hps_traj.xtc')
@@ -267,31 +282,43 @@ class Analysis(lmp.LMP):
         m = scipy.optimize.minimize(fun=cost, x0=x0, args=T)
         return m
 
+    def block_error(self, observable, block_length=5):
+        # TODO : Case when not temper
+        """
+        Observable needs to be in shape (T, frames) (assuming Temper)
+        """
+        mean = observable.mean(axis=1)
+        errors = []
+        for T in range(0, observable.shape[0]):
+            err = 0
+            n_blocks = 0
+            for r in range(0, observable.shape[1]-block_length, block_length):
+                rng = slice(r, r+block_length)
+                err += (observable[T, rng].mean() - mean[T])**2
+                n_blocks += 1
+            errors.append(math.sqrt(err)/n_blocks)
+        return np.array(errors)
+
     def weights(self, Ei, Ef, T):
         # ENERGIES IN LMP IS IN KCAL/MOL (1 KCAL = 4184J)
-        kb = cnt.Boltzmann*cnt.Avogadro/4184
+        kb = cnt.Boltzmann*cnt. Avogadro/4184
         w = np.exp(-(Ef-Ei)/(kb*T))
         return w
 
-    # def get_rg_distribution(self, scikit=False):
-    #     rgs = self.rg_from_lmp()
-    #     rgs = rgs[0]
-    #     kde_scipy = gaussian_kde(rgs)
-    #     kde_scikit = KernelDensity(kernel='gaussian').fit(rgs[:, np.newaxis])
-    #
-    #     x = np.linspace(20, 40, 1000)
-    #     xscikit = np.linspace(20, 40, rgs.shape[0])[:, np.newaxis]
-    #     if scikit:
-    #         return kde_scikit, xscikit
-    #     return kde_scipy, x
-    #
-    # def get_rg_acf(self):
-    #     rgs = self.rg_from_lmp()
-    #     rgs = rgs[0][0]
-    #     acf = sm.tsa.stattools.acf(rgs, nlags=1000)
-    #     return rgs, acf
-
-
+     # TODO : TEST
+    def find_Tc(self, florys=None):
+        temps = self.get_temperatures()
+        if florys is not None:
+            florys = self.flory_scaling_fit()[0]
+        lim_inf = np.max(florys[florys < 0.5])
+        lim_sup = np.min(florys[florys > 0.5])
+        # TODO : FLOAT CONVERSION IN SELF.GET_TEMPERATURES()?
+        T_inf = float(temps[np.where(florys==lim_inf)[0][0]])
+        T_sup = float(temps[np.where(florys==lim_sup)[0][0]])
+        slope = (lim_sup-lim_inf)/(T_sup-T_inf)
+        intersect = lim_sup-slope*T_sup
+        Tc = (0.5 - intersect)/slope
+        return Tc
 
 mpi_results = []
 
@@ -303,7 +330,6 @@ def full_flory_scaling(x, flory, r0):
 def flory_scaling(r0):
     def flory(x, flory):
         return r0 * (x ** flory)
-
     return flory
 
 
