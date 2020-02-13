@@ -10,8 +10,11 @@ import matplotlib.pyplot as plt
 
 
 class Plotter(analysis.Analysis):
+    # def __init__(self, force_recalc=False, **kw):
+    #     super(Plotter, self).__init__(**kw)
     def __init__(self, force_recalc=False, **kw):
-        super(Plotter, self).__init__(**kw)
+
+        super().__init__(**kw)
         self.oliba_prod_dir = '/home/adria/data/prod/lammps'
         self.oliba_data_dir = '/home/adria/data/data'
         self.index = self.make_index()

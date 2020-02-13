@@ -1,4 +1,3 @@
-# TODO: Solve import deficiencies (might help Pycharm)
 import lmp
 import itertools
 import shutil
@@ -9,48 +8,27 @@ import numpy as np
 import os
 import scipy
 import lmpsetup
-import re
-import time
-import datetime
 import multiprocessing as mp
-import glob
 from scipy.optimize import curve_fit
-from scipy.stats import gaussian_kde
-from sklearn.neighbors import KernelDensity
-import statsmodels.api as sm
-from pathlib import Path
-
 from numba import jit
 
 
 class Analysis(lmp.LMP):
     def __init__(self, **kw):
-        # TODO DO TEMPER HANDLE AT START
-        self.contacts = None
-        self.equilibration = 3e6
         super(Analysis, self).__init__(**kw)
+        self.equilibration = 3e6
 
-    def distance_map(self, use='md', contacts=False, temperature=None, inter=False):
-        # print("="*20, f"Calculating contact map using {use}", "="*20)
-        if inter and self.chains > 1:
-            return SystemError("Requesting interchain contacts but only 1 chain present")
-        pdbs = self.make_initial_frame()
-        topo = pdbs[0]
+        self.contacts = None
+        self.ijs = None
+        self.rgs = None
+        self.structures = self.get_structures()
+
+    def intra_distance_map(self, use='md', contacts=False, temperature=None):
+        structures = self.structures.copy()
         contact_maps = []
-        if self.temper:
-            xtcs = self._temper_trj_reorder()
-            # xtcs = glob.glob(os.path.join(self.o_wd, '*.xtc*'))
-        else:
-            xtcs = []
-            for xtc in Path(self.o_wd).rglob('*.xtc'):
-                xtcs.append(os.fspath(xtc))
-            xtcs = sorted(xtcs)
-        if not xtcs:
-            raise SystemError("Can't find valid trajectory files. Check that .xtc or .dcd files exist")
         if temperature is not None:
-            xtcs = [xtcs[temperature]]
-        for xtc in xtcs:
-            traj = md.load(xtc, top=topo)
+            structures = [structures[temperature]]
+        for traj in structures:
             # TODO: TEST FIRST PART OF IF
             if use == 'jit':
                 dframe = []
@@ -61,39 +39,16 @@ class Analysis(lmp.LMP):
                 dframe = np.array(dframe)
                 contact_map = dframe.mean(0)
             elif use == 'md':
-                if inter:
-                    dmaps_by_chain = np.zeros(shape=(self.chains, self.chains - 1, traj.n_frames, self.chain_atoms, self.chain_atoms))
-                    flat_pairs = list(itertools.product(range(self.chain_atoms), range(self.chain_atoms)))
-                    for c1 in range(self.chains):
-                        for c2 in range(self.chains):
-                            if c1 != c2:
-                                pairs = list(itertools.product(range(c1 * self.chain_atoms, (c1 + 1) * self.chain_atoms),
-                                                               range(c2 * self.chain_atoms, (c2 + 1) * self.chain_atoms)))
-                                d = md.compute_distances(traj, pairs)
-                                d = md.geometry.squareform(d, flat_pairs)
-                                if c2 > c1:
-                                    dmaps_by_chain[c1, c2 - 1, :, :, :] = d
-                                else:
-                                    dmaps_by_chain[c1, c2, :, :, :] = d
-                    d = dmaps_by_chain.min(axis=1).mean(axis=0)
-                    if contacts:
-                        dcop = np.copy(d)
-                        dcop[d < 0.6] = 1.
-                        dcop[d > 0.6] = 0.
-                        contact_map = dcop.mean(0)
-                    else:
-                        contact_map = d.mean(0) * 10
+                pairs = list(itertools.product(range(traj.top.n_atoms - 1), range(1, traj.top.n_atoms)))
+                d = md.compute_distances(traj, pairs)
+                d = md.geometry.squareform(d, pairs)
+                if contacts:
+                    dcop = np.copy(d)
+                    dcop[d < 0.6] = 1.
+                    dcop[d > 0.6] = 0.
+                    contact_map = dcop.mean(0)
                 else:
-                    pairs = list(itertools.product(range(traj.top.n_atoms - 1), range(1, traj.top.n_atoms)))
-                    d = md.compute_distances(traj, pairs)
-                    d = md.geometry.squareform(d, pairs)
-                    if contacts:
-                        dcop = np.copy(d)
-                        dcop[d < 0.6] = 1.
-                        dcop[d > 0.6] = 0.
-                        contact_map = dcop.mean(0)
-                    else:
-                        contact_map = d.mean(0) * 10
+                    contact_map = d.mean(0) * 10
             else:
                 pool = mp.Pool()
                 ranges = np.linspace(0, traj.n_frames, mp.cpu_count() + 1, dtype='int')
@@ -107,13 +62,47 @@ class Analysis(lmp.LMP):
                 contact_map = np.mean(mpi_results, axis=0) * 10
             contact_maps.append(contact_map)
         self.contacts = np.array(contact_maps)
-        # print("="*20, "CONTACT MAP CALCULATION FINISHED", "="*20)
+        return contact_maps
+
+    def inter_distance_map(self, use='md', contacts=False, temperature=None):
+        if self.chains == 1:
+            raise SystemError("Demanded interchain distances but only a single chain is present!")
+        structures = self.structures.copy()
+        contact_maps = []
+        if temperature is not None:
+            structures = [structures[temperature]]
+        for traj in structures:
+            # TODO: TEST FIRST PART OF IF
+            dmaps_by_chain = np.zeros(
+                shape=(self.chains, self.chains - 1, traj.n_frames, self.chain_atoms, self.chain_atoms))
+            flat_pairs = list(itertools.product(range(self.chain_atoms), range(self.chain_atoms)))
+            # TODO: INCORPORATE CONTACTS!
+            for c1 in range(self.chains):
+                for c2 in range(self.chains):
+                    if c1 != c2:
+                        pairs = list(itertools.product(range(c1 * self.chain_atoms, (c1 + 1) * self.chain_atoms),
+                                                       range(c2 * self.chain_atoms, (c2 + 1) * self.chain_atoms)))
+                        d = md.compute_distances(traj, pairs)
+                        d = md.geometry.squareform(d, flat_pairs)
+                        if c2 > c1:
+                            dmaps_by_chain[c1, c2 - 1, :, :, :] = d
+                        else:
+                            dmaps_by_chain[c1, c2, :, :, :] = d
+            d = dmaps_by_chain.min(axis=1).mean(axis=0)
+            if contacts:
+                dcop = np.copy(d)
+                dcop[d < 0.6] = 1.
+                dcop[d > 0.6] = 0.
+                contact_map = dcop.mean(0)
+            else:
+                contact_map = d.mean(0) * 10
+            contact_maps.append(contact_map)
+        self.contacts = np.array(contact_maps)
         return contact_maps
 
     def ij_from_contacts(self, use='md', contacts=None):
-        # print("="*20, f"Calculating ij from contact map using {use}", "="*20)
         if contacts is None:
-            self.distance_map(use=use)
+            self.intra_distance_map(use=use)
         else:
             self.contacts = contacts
         tot_means = []
@@ -127,11 +116,9 @@ class Analysis(lmp.LMP):
                 ijs.append(d)
             tot_ijs.append(ijs)
             tot_means.append(means)
-        # print("="*20, "D_IJ FROM CONTACT MAP CALCULATION FINISHED", "="*20)
         return np.array(tot_ijs), np.array(tot_means)
 
     def flory_scaling_fit(self, r0=None, use='md', ijs=None):
-        # print("="*20, f"Starting flory exponent calculation for R0 = {r0} using {use}", "="*20)
         if ijs is None:
             tot_ijs, tot_means = self.ij_from_contacts(use=use)
         else:
@@ -151,8 +138,7 @@ class Analysis(lmp.LMP):
             florys.append(fit_flory)
             r0s.append(fit_r0)
             covs.append(np.sqrt(np.diag(fitv)))
-        # print("="*20, "FLORY EXPONENT CALCULATION FINISHED", "="*20)
-        return np.array(florys), np.array(r0s), np.array(covs)[:,0]
+        return np.array(florys), np.array(r0s), np.array(covs)[:, 0]
 
     def distance_map_by_residue(self):
         contacts = self.contacts
@@ -175,18 +161,10 @@ class Analysis(lmp.LMP):
         return saver, dict_res_translator
 
     def rg(self, use='md'):
-        # n_chains = self.get_n_chains()
-        # TODO : HOTFIX
-        n_chains = 1
-        if self.temper:
-            data = self.get_lmp_temper_data()
-        else:
-            data = self.get_lmp_data()
         rgs = []
-        if use == 'md':
-            xtcs = self._temper_trj_reorder()
-        # TODO: DEFINETELY BROKEN
         if use == 'lmp':
+            if self.chains != 1:
+                raise SystemError("LMP method not reliable for Multichain systems")
             data = self.get_lmp_data()
             for run in range(data.shape[0]):
                 # TODO INCORPORATE EQUILIBRATION EVERYWHERE
@@ -195,29 +173,18 @@ class Analysis(lmp.LMP):
                 rgs.append(rg_frame)
         if use == 'md':
             """ Only this case seems to work for multichain ! """
-            topo = self.make_initial_frame()[0]
-            for xtc in xtcs:
-                tload = md.load(xtc, top=topo)
-                # TODO : TEST
-                if n_chains != 1:
+            for traj in self.structures:
+                if self.chains != 1:
                     rg = 0
-                    for chain in range(n_chains):
-                        tr = tload[:]
+                    for chain in range(self.chains):
+                        tr = traj[:]
                         atom_slice = slice(chain*tr.n_atoms, (chain+1)*tr.n_atoms)
-                        print(atom_slice)
                         tr.atom_slice(atom_slice)
                         rg += md.compute_rg(tr)
-                    rg = rg/n_chains*10.
+                    rg = rg/self.chains*10.
                 else:
-                    rg = md.compute_rg(tload)*10.
+                    rg = md.compute_rg(traj)*10.
                 rgs.append(rg)
-            # for dir in self.lmp_drs:
-            #     traj = os.path.join(dir, 'hps_traj.xtc')
-            #     topo = os.path.join(os.path.dirname(traj), 'hps_trj.pdb')
-            #     tload = md.load(traj, top=topo)
-            #     rg = md.compute_rg(tload)
-            #     rgs.append(rg)
-            #     tloads.append(tload)
         return np.array(rgs)
 
     def minimize_I_ls(self, a_dir, b_dir, protein_a, protein_b, temp_dir='/home/adria/test/rerun/min'):
@@ -325,12 +292,11 @@ class Analysis(lmp.LMP):
         return np.array(errors)
 
     def weights(self, Ei, Ef, T):
-        # ENERGIES IN LMP IS IN KCAL/MOL (1 KCAL = 4184J)
+        """ ENERGIES IN LMP IS IN KCAL/MOL (1 KCAL = 4184J) """
         kb = cnt.Boltzmann*cnt. Avogadro/4184
         w = np.exp(-(Ef-Ei)/(kb*T))
         return w
 
-     # TODO : TEST
     def find_Tc(self, florys=None):
         temps = self.get_temperatures()
         if florys is None:

@@ -10,34 +10,34 @@ import multiprocessing as mp
 from subprocess import run, PIPE
 import pathlib
 import scipy.constants as cnt
-from numba import jit
 
 
 class LMP:
-    def __init__(self, oliba_wd, temper=False, force_reorder=False):
-        # TODO DO TEMPER HANDLE AT START
-        self.res_dict = definitions.residues
-        # TODO seq from file ?
-        self.sequence = None
-        self.residue_dict = dict(definitions.residues)
-
-        self.temper = temper
-        self.force_reorder = force_reorder
-
+    def __init__(self, oliba_wd, force_reorder=False):
         self.o_wd = oliba_wd
         self.p_wd = oliba_wd.replace('/perdiux', '')
 
+        self.lmp2pdb = '/home/adria/perdiux/src/lammps-7Aug19/tools/ch2lmp/lammps2pdb.pl'
         self.lmp = '/home/adria/local/lammps/bin/lmp'
-        self.lmp_drs = self.get_lmp_dirs()
 
         self.hps_epsilon = 0.2
         self.hps_pairs = None
 
-        self.structures = None
-        self.data = None
-        self.lmp2pdb = '/home/adria/perdiux/src/lammps-7Aug19/tools/ch2lmp/lammps2pdb.pl'
+        # Even if named "files" they are actually the lines of the files...
+        self.data_file = self._get_data_file()
+        self.lmp_file = self._get_lmp_file()
+        self.temper = self._is_temper()
+        self.log_files = self._get_log_files()
+        self.topology_path = self._get_initial_frame()
 
+        self.residue_dict = dict(definitions.residues)
+
+        self.force_reorder = force_reorder
+
+        self.lmp_drs = self.get_lmp_dirs()
         self.chains, self.chain_atoms = self.get_n_chains()
+        self.sequence = self.get_seq_from_hps()
+        self.data = self.get_lmp_data()
 
     def get_lmp_dirs(self, path=None):
         if path is None:
@@ -48,35 +48,29 @@ class LMP:
         dirs.sort()
         return dirs
 
-    def make_initial_frame(self, dirs=None):
-        pdb_paths = []
-        if dirs is None:
-            dirs = self.lmp_drs
-        for dir in dirs:
-            files = glob.glob(os.path.join(dir, '*.data'))
-            if glob.glob(os.path.join(dir, '*.pdb')):
-                pdb_paths.append(glob.glob(os.path.join(dir, '*.pdb'))[0])
-                continue
+    def _get_initial_frame(self, dirs=None):
+        if os.path.exists(os.path.join(self.o_wd, 'topo.pdb')):
+            return os.path.join(self.o_wd, 'topo.pdb')
+        else:
+            files = glob.glob(os.path.join(self.o_wd, '*.data'))
             file = os.path.basename(files[0])
             file = file.replace('.data', '')
             lammps2pdb = self.lmp2pdb
-            os.system(lammps2pdb + ' ' + os.path.join(dir, file))
-            fileout = os.path.join(dir, file) + '_trj.pdb'
-            pdb_paths.append(fileout)
-        return pdb_paths
+            os.system(lammps2pdb + ' ' + os.path.join(self.o_wd, file))
+            fileout = os.path.join(self.o_wd, file) + '_trj.pdb'
+            return fileout
 
+    # TODO : SHOULD I REORDER THIS???
     def get_lmp_data(self, progress=False):
-        data = []
-        prog = 0
-        for d in self.lmp_drs:
-            log_lmp = open(os.path.join(d, 'log.lammps'), 'r')
-            lines = log_lmp.readlines()
+        data, data_ends, prog = [], [], []
+        dstart = 0
+        for log_data in self.log_files:
             data_start = 0
             data_end = 0
-            for i, line in enumerate(lines):
+            for i, line in enumerate(log_data):
                 if progress:
-                    if "run" in line:
-                        prog = int(re.findall(r'\d+', line)[0])
+                    if "temper" in line or "run" in line:
+                        prog.append(int(re.findall(r'\d+', line)[0]))
                 if "Step" in line:
                     data_start = i + 1
                 if "Loop" in line:
@@ -84,126 +78,73 @@ class LMP:
                 if data_end and data_start != 0:
                     break
             if data_end == 0:
-                data_end = len(lines)
-            dat = np.loadtxt(os.path.join(d, 'log.lammps'), skiprows=data_start, max_rows=data_end - data_start)
+                data_end = len(log_data)
+            data_ends.append(data_end)
+            dstart = data_start
+        data_end_min = np.array(data_ends).min()
+        for log_data in self.log_files:
+            dat = np.genfromtxt(log_data[dstart:data_end_min])
             data.append(dat)
-            # TODO : BROKEN!
-            # print(f"Run Completed at {dat[:, 0].max()/prog*100:.2f} %")
         data = np.array(data)
-        return data
-
-    def get_lmp_temper_data(self, lmp_directories=None, progress=False):
-        data = []
-        prog = []
-        dends, dstarts = [], 0
-        for d in self.lmp_drs:
-            if lmp_directories is None:
-                lmps = glob.glob(os.path.join(d, "log.lammps.*"))
-            else:
-                lmps = lmp_directories
-            lmps = sorted(lmps, key=lambda x: int(re.findall(r'\d+', os.path.basename(x))[0]))
-            for lmp in lmps:
-                log_lmp = open(os.path.join(d, lmp), 'r')
-                lines = log_lmp.readlines()
-                data_start = 0
-                data_end = 0
-                for i, line in enumerate(lines):
-                    if progress:
-                        if "temper" in line:
-                            if int(re.findall(r'\d+', line)[0]) > 100000:
-                                prog.append(int(re.findall(r'\d+', line)[0]))
-                    if "Step" in line:
-                        data_start = i + 1
-                    if "Loop" in line:
-                        data_end = i
-                    if data_end and data_start != 0:
-                        break
-                if data_end == 0:
-                    data_end = len(lines)
-                dends.append(data_end)
-                dstarts = data_start
-        dmin = np.array(dends).min()
-        for i, lmp in enumerate(lmps):
-            dat = np.loadtxt(os.path.join(d, lmp), skiprows=dstarts, max_rows=dmin - dstarts)
-            data.append(dat)
-            step_max = dat[:, 0].max()
+        ran_steps = int(data[:, :, 0].mean(axis=0).max())
         if progress:
-            print(f"Run Completed at {step_max / np.array(prog).mean() * 100:.2f} %")
-        data = np.array(data)
+            print(f"Run Completed at {ran_steps/np.array(prog).mean()*100:.2f} %")
         return data
 
     def get_lmp_E(self):
-        if self.temper:
-            self.data = self.get_lmp_temper_data()
-            E = self.data[:, :, [1, 2]]
-        else:
-            self.data = self.get_lmp_data()
-            E = self.data[:, :, [1, 2]]
+        E = self.data[:, :, [1, 2]]
         return E
 
     def get_eps(self):
-        lmp_path = glob.glob(os.path.join(self.o_wd, '*.lmp'))
-        if lmp_path:
-            with open(lmp_path[0], 'r') as log_lmp:
-                lines = log_lmp.readlines()
-                for line in lines:
-                    if "dielectric" in line:
-                        eps = re.findall(r'\d+', line)[0]
-                        break
+        eps = 0
+        for line in self.lmp_file:
+            if "dielectric" in line:
+                eps = re.findall(r'\d+', line)[0]
+                break
         return eps
 
     def get_ionic_strength(self):
-        lmp_path = glob.glob(os.path.join(self.o_wd, '*.lmp'))
-        if lmp_path:
-            with open(lmp_path[0], 'r') as log_lmp:
-                lines = log_lmp.readlines()
-                for line in lines:
-                    if "ljlambda" in line:
-                        debye = re.findall(r'\d+\.?\d*', line)[0]
-                        unroundedI = self.get_I_from_debye(float(debye), eps=float(self.get_eps()))
-                        if unroundedI >= 0.1:
-                            I = round(unroundedI, 1)
-                            break
-                        else:
-                            I = round(unroundedI, 3)
-                            break
-        return I
+        ionic_strength = 0
+        for line in self.lmp_file:
+            if "ljlambda" in line:
+                debye = re.findall(r'\d+\.?\d*', line)[0]
+                unroundedI = self.get_I_from_debye(float(debye), eps=float(self.get_eps()))
+                if unroundedI >= 0.1:
+                    ionic_strength = round(unroundedI, 1)
+                    break
+                else:
+                    ionic_strength = round(unroundedI, 3)
+                    break
+        return ionic_strength
 
     def get_temperatures(self):
         if not self.temper:
             print("TODO IF NOT TEMPER")
             return
-        lmp_path = glob.glob(os.path.join(self.o_wd, '*.lmp'))
         T = []
-        if lmp_path:
-            with open(lmp_path[0], 'r') as log_lmp:
-                lines = log_lmp.readlines()
-                for line in lines:
-                    if "variable T world" in line:
-                        T = re.findall(r'\d+\.?\d*', line)
-                        break
+        for line in self.lmp_file:
+            if "variable T world" in line:
+                T = re.findall(r'\d+\.?\d*', line)
+                break
         return np.array(T, dtype=float)
 
-    # TODO : TEST
     def get_n_chains(self):
-        lmp_data = glob.glob(os.path.join(self.o_wd, '*.data'))
         unit_atoms, n_atoms, reading_atoms = 0, 0, False
-        if lmp_data:
-            with open(lmp_data[0], 'r') as data:
-                lines = data.readlines()
-                for line in lines:
-                    if 'atoms' in line:
-                        n_atoms = int(re.findall(r'\d+', line)[0])
-                    if reading_atoms and line != '\n':
-                        if int(re.findall(r'\d+', line)[1])==1:
-                            unit_atoms += 1
-                        if int(re.findall(r'\d+', line)[1])!=1:
-                            reading_atoms=False
-                            break
-                    if 'Atoms' in line:
-                        reading_atoms = True
-                    if 'Bonds' in line:
+        for line in self.data_file:
+            if 'atoms' in line:
+                n_atoms = int(re.findall(r'\d+', line)[0])
+            if reading_atoms and line != '\n':
+                nums = re.findall(r'\d+', line)
+                if nums:
+                    if int(nums[1]) == 1:
+                        unit_atoms += 1
+                    if int(nums[1]) != 1:
+                        reading_atoms = False
                         break
+            if 'Atoms' in line:
+                reading_atoms = True
+            if 'Bonds' in line:
+                break
         n_chains = int(n_atoms/unit_atoms)
         return n_chains, unit_atoms
 
@@ -232,14 +173,8 @@ class LMP:
         idx = deltas.argsort()
         return seqs[idx][::-1], deltas[idx][::-1], scds[idx][::-1]
 
+    # TODO : Maybe this at LMPSETUP???
     def get_charge_seq(self, sequence, window=9):
-        charged_plus = []
-        charged_minus = []
-        # for i, aa in enumerate(sequence):
-        #     if self.residue_dict[aa]["q"] < 0:
-        #         charged_minus.append(i)
-        #     if self.residue_dict[aa]["q"] > 0:
-        #         charged_plus.append(i)
         win = np.zeros(len(sequence))
         rr = int((window-1)/2)
         if rr >= 0:
@@ -262,17 +197,13 @@ class LMP:
         minus[minus > 0.] = 0
         return win, plus, minus
 
+    # TODO : PROBABLY BROKEN
     def pappu_delta(self, sequence, g=5):
-        # TODO: ONLY FOR PROLINE-LESS SEQUENCES! What the hell ?
+        # TODO: ONLY FOR PROLINE-LESS SEQUENCES! What the hell ? Check ref
         N = len(sequence) - (g - 1)
         itot, iplus, iminus = self.get_charge_seq(sequence)
         f_plus = np.count_nonzero(iplus > 0)/len(itot)
         f_minus = np.count_nonzero(iminus < 0)/len(itot)
-        print(f_plus, f_minus)
-        # f_plus = np.unique(np.array(iplus), return_counts=True)[1]
-        # f_minus = np.unique(np.array(iminus), return_counts=True)[1]
-        # f_plus = len(iplus)/len(itot)
-        # f_minus = len(iminus)/len(itot)
         sigma = (f_plus - f_minus) ** 2 / (f_plus + f_minus)
         delta = 0
         for i in range(N):
@@ -287,6 +218,7 @@ class LMP:
                 delta += (sigma_i - sigma) ** 2 / N
         return delta
 
+    # TODO : PROBABLY BROKEN
     def chan_scd(self, sequence):
         total, plus, minus = self.get_charge_seq(sequence)
         scd = 0
@@ -306,50 +238,39 @@ class LMP:
                 scd += sigma_i*sigma_j*np.sqrt(np.abs(total[i]-total[j]))
         return scd/(len(sequence))
 
+    # TODO : MULTICHAIN CASE ?
     def get_seq_from_hps(self):
-        for lmp_dir in self.lmp_drs:
-            data_paths = glob.glob(os.path.join(lmp_dir, "*.data"))
-            data_path = data_paths[0]
-            with open(data_path, 'r') as data_file:
-                lines = data_file.readlines()
-                mass_range, atom_range = [0, 0], [0, 0]
-                reading_masses, reading_atoms = False, False
-                # TODO Not too smart
-                for i, line in enumerate(lines):
-                    if "Atoms" in line:
-                        reading_masses = False
-                        mass_range[1] = i
-
-                    if reading_masses and line != '\n' and mass_range[0] == 0:
-                        mass_range[0] = i
-
-                    if "Masses" in line:
-                        reading_masses = True
-
-                    if "Bonds" in line:
-                        reading_atoms = False
-                        atom_range[1] = i
-
-                    if reading_atoms and line != '\n' and atom_range[0] == 0:
-                        atom_range[0] = i
-
-                    if "Atoms" in line:
-                        reading_atoms = True
-            masses = np.loadtxt(data_path, skiprows=mass_range[0], max_rows=mass_range[1] - mass_range[0])
-            atoms = np.loadtxt(data_path, skiprows=atom_range[0], max_rows=atom_range[1] - atom_range[0])
-            mass_dict = {}
-            for mass in masses:
-                for res in self.res_dict:
-                    if self.res_dict[res]["mass"] == mass[1]:
-                        mass_dict[int(mass[0])] = res
-                        break
-            seq = []
-            for atom in atoms:
-                seq.append(mass_dict[atom[2]])
-            seq_str = ''.join(seq)
-            # print(
-            #     "Finding used sequence. Note that Isoleucine and Leucine have the same exact HPS parameters. Therefore, they are not distinguishable.")
-            return seq_str
+        mass_range, atom_range = [0, 0], [0, 0]
+        reading_masses, reading_atoms = False, False
+        # TODO Not too smart
+        for i, line in enumerate(self.data_file):
+            if "Atoms" in line:
+                reading_masses = False
+                mass_range[1] = i
+            if reading_masses and line != '\n' and mass_range[0] == 0:
+                mass_range[0] = i
+            if "Masses" in line:
+                reading_masses = True
+            if "Bonds" in line:
+                reading_atoms = False
+                atom_range[1] = i
+            if reading_atoms and line != '\n' and atom_range[0] == 0:
+                atom_range[0] = i
+            if "Atoms" in line:
+                reading_atoms = True
+        masses = np.genfromtxt(self.data_file[mass_range[0]:mass_range[1]])
+        atoms = np.genfromtxt(self.data_file[atom_range[0]:atom_range[1]])
+        mass_dict = {}
+        for mass in masses:
+            for res in self.residue_dict:
+                if self.residue_dict[res]["mass"] == mass[1]:
+                    mass_dict[int(mass[0])] = res
+                    break
+        seq = []
+        for atom in atoms:
+            seq.append(mass_dict[atom[2]])
+        seq_str = ''.join(seq)
+        return seq_str
 
     def run(self, file, n_cores=1):
         f_name = os.path.join(self.o_wd, file)
@@ -400,13 +321,45 @@ class LMP:
                 lines.append(line)
         self.hps_pairs = lines
 
-    # TODO : ...
     def get_structures(self):
-        dcds = glob.glob(os.path.join(self.o_wd, '*.dcd'))
-        dcds = sorted(dcds, key=lambda x: int(re.findall(r'\d+', os.path.basename(x))[0]))
-        top = self.make_initial_frame()[0]
+        if self.temper:
+            dcds = self._temper_trj_reorder()
+        else:
+            dcds = glob.glob(os.path.join(self.o_wd, '*.dcd'))
+            dcds = sorted(dcds, key=lambda x: int(re.findall(r'\d+', os.path.basename(x))[0]))
+        structures = []
         for dcd in dcds:
-            self.structure.append(md.load(dcd, top=top))
+            structures.append(md.load(dcd, top=self.topology_path))
+        return structures
+
+    def _get_lmp_file(self):
+        lmp = glob.glob(os.path.join(self.o_wd, '*.lmp'))[0]
+        with open(os.path.join(self.o_wd, lmp), 'r') as lmp_file:
+            return lmp_file.readlines()
+
+    def _get_data_file(self):
+        data = glob.glob(os.path.join(self.o_wd, '*.data'))[0]
+        with open(os.path.join(self.o_wd, data), 'r') as data_file:
+            return data_file.readlines()
+
+    def _get_log_files(self):
+        logs = glob.glob(os.path.join(self.o_wd, 'log.lammps*'))
+        if self.temper:
+            logs.remove(os.path.join(self.o_wd, 'log.lammps'))
+            logs = sorted(logs, key=lambda x: int(re.findall(r'\d+', os.path.basename(x))[0]))
+        log_data_store = []
+        for log in logs:
+            with open(os.path.join(self.o_wd, log), 'r') as log_file:
+                log_data_store.append(log_file.readlines())
+        return log_data_store
+
+    def _is_temper(self):
+        temper = False
+        for line in self.lmp_file:
+            if "temper" in line:
+                temper = True
+                break
+        return temper
 
     def _get_hps_params(self):
         for key in self.residue_dict:
@@ -425,28 +378,27 @@ class LMP:
             lines = log_lmp.readlines()
             T_start = 0
             T_end = len(lines)
-            for i, line in enumerate(lines):
+            for x, line in enumerate(lines):
                 if 'Step' in line:
-                    T_start = i + 1
+                    T_start = x + 1
                     break
-            T_log = np.loadtxt(os.path.join(self.o_wd, 'log.lammps'), skiprows=T_start, max_rows=T_end - T_start,
+            in_temp_log = np.loadtxt(os.path.join(self.o_wd, 'log.lammps'), skiprows=T_start, max_rows=T_end - T_start,
                                dtype='int')
-            return T_log
+            return in_temp_log
 
-        # TODO : !!!!!!!!!!
         if not self.force_reorder:
             if glob.glob(os.path.join(self.o_wd, '*reorder*')):
-                # print("Omitting temper reordering (reorder files already present)")
+                print("Omitting temper reordering (reorder files already present)")
                 xtcs = glob.glob(os.path.join(self.o_wd, '*reorder*'))
                 xtcs = sorted(xtcs, key=lambda x: int(re.findall(r'\d+', os.path.basename(x))[0]))
                 return xtcs
 
-        T_log = _get_temper_switches()
+        temp_log = _get_temper_switches()
 
         # !!!!!!!!! Assuming dump frequency is the same as thermo frequence !!!!!!!!!
         self.data = self.get_lmp_temper_data(progress=False)
 
-        T_swap_rate = T_log[1, 0] - T_log[0, 1]
+        T_swap_rate = temp_log[1, 0] - temp_log[0, 1]
         traj_save_rate = int(self.data[0, 1, 0] - self.data[0, 0, 0])
         if traj_save_rate < T_swap_rate:
             trj_frame_incr = int(T_swap_rate/traj_save_rate)
@@ -479,15 +431,15 @@ class LMP:
         reordered_trajs = np.zeros(shape=(len(trajs), trajs[0].n_frames, trajs[0].n_atoms, 3))
         c = 0
         # TODO: Time consuming...
-        for i in range(0, T_log.shape[0], runner):
-            print(f'Swapping progress : {i/T_log.shape[0]*100.:.2f} %', end='\r')
+        for i in range(0, temp_log.shape[0], runner):
+            print(f'Swapping progress : {i/temp_log.shape[0]*100.:.2f} %', end='\r')
             if runner != 1:
                 cr = slice(c, c+1, 1)
                 c += 1
             else:
                 #TODO MIGHT BLOW UP ?
                 cr = slice(trj_frame_incr*(i), trj_frame_incr*(i+1), 1)
-            for Ti, T in enumerate(T_log[i, 1:]):
+            for Ti, T in enumerate(temp_log[i, 1:]):
                 reordered_data[T, cr, :] = self.data[Ti, cr, :]
                 reordered_trajs[T, cr, :, :] = trajs[Ti][cr].xyz
 
@@ -507,5 +459,3 @@ class LMP:
         print(reordered_data.shape)
         np.savetxt('../default_output/datareorder.lammps', reordered_data[0,:,:])
         return xtc_paths
-
-# TODO Handle Temperatures or Ionic strengths...
