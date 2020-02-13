@@ -382,6 +382,7 @@ class Analysis(lmp.LMP):
                     clust[com2, current_cluster] = 1
         print(clust)
 
+
 mpi_results = []
 
 
