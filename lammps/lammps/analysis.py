@@ -21,7 +21,8 @@ class Analysis(lmp.LMP):
         self.contacts = None
         self.ijs = None
         self.rgs = None
-        self.structures = self.get_structures()
+        if self.o_wd is not None:
+            self.structures = self.get_structures()
 
     def intra_distance_map(self, use='md', contacts=False, temperature=None):
         structures = self.structures.copy()

@@ -18,22 +18,20 @@ class LMP:
 
         self.lmp2pdb = '/home/adria/perdiux/src/lammps-7Aug19/tools/ch2lmp/lammps2pdb.pl'
         self.lmp = '/home/adria/local/lammps/bin/lmp'
-
-        # Even if named "files" they are actually the lines of the files...
-        self.data_file = self._get_data_file()
-        self.lmp_file = self._get_lmp_file()
-        self.temper = self._is_temper()
-        self.log_files = self._get_log_files()
-        self.topology_path = self._get_initial_frame()
-
         self.residue_dict = dict(definitions.residues)
 
         self.force_reorder = force_reorder
+        if self.o_wd is not None:
+            # Even if named "files" they are actually the lines of the files...
+            self.data_file = self._get_data_file()
+            self.lmp_file = self._get_lmp_file()
+            self.temper = self._is_temper()
+            self.log_files = self._get_log_files()
+            self.topology_path = self._get_initial_frame()
 
-        self.lmp_drs = self.get_lmp_dirs()
-        self.chains, self.chain_atoms = self.get_n_chains()
-        self.sequence = self.get_seq_from_hps()
-        self.data = self.get_lmp_data()
+            self.chains, self.chain_atoms = self.get_n_chains()
+            self.sequence = self.get_seq_from_hps()
+            self.data = self.get_lmp_data()
 
     def get_lmp_dirs(self, path=None):
         if path is None:
@@ -284,7 +282,7 @@ class LMP:
         os.chdir(old_wd)
         return out
 
-    def get_I_from_debye(self, debye_wv, eps=80, temperature=300):
+    def get_I_from_debye(self, debye_wv, eps=80., temperature=300):
         sqrtI = np.sqrt(cnt.epsilon_0 * eps * cnt.Boltzmann * temperature) / ((
                     np.sqrt(2 * 10 ** 3 * cnt.Avogadro) * cnt.e)*(1/debye_wv)*10**-10)
         return sqrtI**2
@@ -299,6 +297,15 @@ class LMP:
         for dcd in dcds:
             structures.append(md.load(dcd, top=self.topology_path))
         return structures
+
+    def _get_hps_params(self):
+        for key in self.residue_dict:
+            for lam_key in definitions.lambdas:
+                if self.residue_dict[key]["name"] == lam_key:
+                    self.residue_dict[key]["lambda"] = definitions.lambdas[lam_key]
+            for sig_key in definitions.sigmas:
+                if self.residue_dict[key]["name"] == sig_key:
+                    self.residue_dict[key]["sigma"] = definitions.sigmas[sig_key]
 
     def _get_lmp_file(self):
         lmp = glob.glob(os.path.join(self.o_wd, '*.lmp'))[0]
@@ -330,6 +337,7 @@ class LMP:
         return temper
 
     # TODO : SLOW, PARALLELIZE ?
+    # TODO : STILL NEEDS TO BE CLEANED
     def _temper_trj_reorder(self):
         def _get_temper_switches():
             # Temper runs are single file

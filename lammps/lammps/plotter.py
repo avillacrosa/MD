@@ -4,17 +4,17 @@ import glob
 import re
 import pandas as pd
 import numpy as np
+import scipy
+import statsmodels as sm
 import pathlib
 from scipy import stats
 import matplotlib.pyplot as plt
 
 
 class Plotter(analysis.Analysis):
-    # def __init__(self, force_recalc=False, **kw):
-    #     super(Plotter, self).__init__(**kw)
-    def __init__(self, force_recalc=False, **kw):
-
-        super().__init__(**kw)
+    def __init__(self, force_recalc=False):
+        super(Plotter, self).__init__(oliba_wd=None)
+        # analysis.Analysis.__init__(self, oliba_wd=None)
         self.oliba_prod_dir = '/home/adria/data/prod/lammps'
         self.oliba_data_dir = '/home/adria/data/data'
         self.index = self.make_index()
@@ -104,49 +104,58 @@ class Plotter(analysis.Analysis):
         return df
 
     # TODO : TOO MANY ARGUMENTS... think of another possibility ?
-    def plot(self, observable, protein, eps, I, ls, protein2=None, sequence=None, temperature=4, label=None, style=None):
+    # TODO : CHOICE BY INDEX ?
+    # def plot(self, observable, protein, Eps, I, Scale, protein2=None, sequence=None, temperature=4, label=None, style=None):
+    def plot(self, observable, protein, Eps, I, Scale, **kwargs):
         # TODO : SEQUENCE HAS TO BE EXPLICIT, MAYBE CAN BE IMPLICIT
         self.obs_data = None
-        if label:
-            self.label = label
+        if "label" in kwargs:
+            self.label = kwargs["label"]
         else:
-            self.label = f'{protein}, I = {I:.0f}, ε = {eps:.0f} HPS = {ls:.1f}'
+            self.label = f'{protein}, I = {I:.0f}, ε = {Eps:.0f} HPS = {Scale:.1f}'
         self.style = '-'
-        if style:
-            self.style = style
+        if "style" in kwargs:
+            self.style = kwargs["style"]
+
+        sequence = kwargs["sequence"]
+        protein2 = kwargs["protein2"]
+        temperature = kwargs["temperature"]
 
         # if not self.figure or observable in ['distance_map', 'contact_map']:
         self.figure, self.axis = plt.subplots(figsize=(16, 12), sharex=True)
         if observable not in self.observables:
             print(f"Observable not found. Available ones are : {self.observables}")
             return
+
         df = self.index
         df2 = df.copy()
         df = df.loc[df['Protein'] == protein]
-        df = df.loc[df['Eps'] == eps]
-        df = df.loc[df['Scale'] == ls]
+        df = df.loc[df['Eps'] == Eps]
+        df = df.loc[df['Scale'] == Scale]
         df = df.loc[df['I'] == I]
 
-        fout = f'{ls:.1f}ls-{I:.0f}I-{eps:.0f}e'
+        fout = f'{Scale:.1f}ls-{I:.0f}I-{Eps:.0f}e'
         d = os.path.join(self.oliba_data_dir, observable, protein, fout)
         if os.path.exists(d) and self.force_recalc is False:
             print("Requested data already available")
             self.obs_data = np.genfromtxt(os.path.join(d, 'data.txt'))
 
+        # if not (args.process or args.upload):
+        #     parser.error('No action requested, add -process or -upload')
+
         # TODO BETTER WAY FOR THIS ???
         # TODO : Maybe pass metaobject to plot ?
         self.o_wd = df.to_numpy()[0][-1]
+        super(Plotter, self).__init__(oliba_wd=self.o_wd)
         # TODO : TOO LATE TO DO THIS ?
         self.temperatures = self.get_temperatures()
         self.protein = protein
-        # TODO : IS IT REALLY NECESSARY ?
-        self.lmp_drs = self.get_lmp_dirs()
 
         o_wd2 = None
         if protein2:
             df2 = df2.loc[df2['Protein'] == protein2]
-            df2 = df2.loc[df2['Eps'] == eps]
-            df2 = df2.loc[df2['Scale'] == ls]
+            df2 = df2.loc[df2['Eps'] == Eps]
+            df2 = df2.loc[df2['Scale'] == Scale]
             df2 = df2.loc[df2['I'] == I]
             o_wd2 = df2.to_numpy()[0][-1]
         if observable == 'rg':
@@ -338,7 +347,7 @@ class Plotter(analysis.Analysis):
     def plot_E_ensemble(self):
         # TODO INTEGRATE TO PLOT FUNCTION
         self.figure, self.axis = plt.subplots(figsize=(16, 12), sharex=True)
-        data = self.get_lmp_temper_data()
+        data = self.get_lmp_data()
         print(data.shape)
         # kin_E = data[:, :, 2]
         kin_E = 0
@@ -353,16 +362,13 @@ class Plotter(analysis.Analysis):
             self.axis.plot(x, kde_scipy(x))
         self.axis.legend()
 
-    # TODO !!!! Still need to be translated, but they are pretty niche atm !!!!
-    def plot_gaussian_kde(dir, equil=3000):
-        rgs, Is = calc.rg_from_lmp(dir, equil)
-        rgs = rgs[0]
-        kde_scipy = scipy.stats.gaussian_kde(rgs)
+    def plot_gaussian_kde(self, data):
+        kde_scipy = scipy.stats.gaussian_kde(data)
 
-        x = np.linspace(20, 40, 1000)
+        x = np.linspace(data.min(), data.max(), 1000)
 
-        plt.hist(rgs, density=True)
-        plt.plot(x, kde_scipy(x), '--', label='Scipy')
+        self.axis.hist(data, density=True)
+        self.axis.plot(x, kde_scipy(x), '--')
         plt.legend()
         plt.show()
 
@@ -395,26 +401,6 @@ class Plotter(analysis.Analysis):
         plt.savefig('../default_output/res_map.png')
         plt.show()
 
-    # TODO !!!! Still need to be translated, but they are pretty niche atm !!!!
-    def plot_gaussian_kde(dir, equil=3000):
-        rgs, Is = calc.rg_from_lmp(dir, equil)
-        rgs = rgs[0]
-        kde_scipy = gaussian_kde(rgs)
-        kde_scikit = KernelDensity(kernel='gaussian').fit(rgs[:, np.newaxis])
-
-        x = np.linspace(20, 40, 1000)
-        xsickit = np.linspace(20, 40, rgs.shape[0])[:, np.newaxis]
-
-        plt.hist(rgs, density=True)
-        sns.kdeplot(rgs, label='Seaborn')
-        plt.plot(x, kde_scipy(x), '--', label='Scipy')
-        plt.plot(xsickit, np.exp(kde_scikit.score_samples(xsickit)), label='Scikit')
-        plt.legend()
-        plt.show()
-
-    # TODO !!!! Still need to be translated, but they are pretty niche atm !!!!
-    def plot_autocorrelation(dir, equil=3655000):
-        rgs = calc.rg_from_lmp(dir, equil)
-        rgs = rgs[0][0]
-        acf = sm.tsa.stattools.acf(rgs, nlags=1000)
-        return rgs, acf
+    def plot_autocorrelation(self, data, nlags=1000):
+        acf = sm.tsa.stattools.acf(data, nlags=nlags)
+        return acf
