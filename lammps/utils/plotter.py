@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 
 
 class Plotter(analysis.Analysis):
-    def __init__(self, **kw):
+    def __init__(self, force_recalc=False, **kw):
         super(Plotter, self).__init__(**kw)
         self.oliba_prod_dir = '/home/adria/data/prod/lammps'
         self.oliba_data_dir = '/home/adria/data/data'
@@ -35,13 +35,7 @@ class Plotter(analysis.Analysis):
         self.distant_map = None
 
         self.observables = ['rg', 'distance_map', 'contact_map', 'dij', 'flory', 'charge']
-        # pl = self
-        # self.observables = {
-        #     'rg': pl.rg,
-        #     'distance_map': pl.plot_distance_map,
-        #     'contact_map': pl.plot_distance_map,
-        #     'dij': pl.plot_dijs
-        # }
+        self.force_recalc = force_recalc
 
     def make_index(self, force_update=True):
         if os.path.exists('../data/index.txt') and not force_update:
@@ -113,7 +107,7 @@ class Plotter(analysis.Analysis):
         if label:
             self.label = label
         else:
-            self.label = f'{self.protein}, I = {I:.0f}, ε = {eps:.0f} HPS = {ls:.1f}'
+            self.label = f'{protein}, I = {I:.0f}, ε = {eps:.0f} HPS = {ls:.1f}'
         self.style = '-'
         if style:
             self.style = style
@@ -132,9 +126,9 @@ class Plotter(analysis.Analysis):
 
         fout = f'{ls:.1f}ls-{I:.0f}I-{eps:.0f}e'
         d = os.path.join(self.oliba_data_dir, observable, protein, fout)
-        if os.path.exists(d):
+        if os.path.exists(d) and self.force_recalc is False:
             print("Requested data already available")
-            self.obs_data = np.genfromtxt(os.path.join(d,'data.txt'))
+            self.obs_data = np.genfromtxt(os.path.join(d, 'data.txt'))
 
         # TODO BETTER WAY FOR THIS ???
         # TODO : Maybe pass metaobject to plot ?
@@ -179,7 +173,7 @@ class Plotter(analysis.Analysis):
             np.savetxt(os.path.join(d, 'data.txt'), data)
         return
 
-    def plot_distance_map(self, sequence, b=None, contacts=False, temperature=None, double=False):
+    def plot_distance_map(self, sequence, b=None, contacts=False, temperature=None, double=False, log=False):
         if self.obs_data is not None:
             cont_map = self.obs_data
         else:
@@ -192,7 +186,10 @@ class Plotter(analysis.Analysis):
             B_contacts = B.distance_map(use='md', contacts=contacts, temperature=temperature)
             # TODO: FIX! OTHER WAY AROUND...
             if not double:
-                cont_map = cont_map - B_contacts
+                if log:
+                    cont_map = np.log(cont_map/B_contacts)
+                else:
+                    cont_map = cont_map - B_contacts
             cmap = 'PRGn'
 
         if temperature:
@@ -279,17 +276,20 @@ class Plotter(analysis.Analysis):
         self.axis.set_ylabel(r"Rg ($\AA$)", fontsize=self.label_fsize)
         self.axis.set_xlabel("T (K)", fontsize=self.label_fsize)
         self.axis.plot(self.temperatures, rg.mean(axis=1), self.style, label=self.label)
-        if self.flory:
+        if self.flory is not None:
             Tc = self.find_Tc(florys=self.flory)
-            idx_sup = np.where(self.temperatures == Tc)[0][0]+1
-            idx_inf = np.where(self.temperatures == Tc)[0][0]-1
-            slope = (rg[:, idx_sup] - rg[:, idx_inf])/(self.temperatures[idx_sup] - self.temperatures[idx_inf])
-            intersect = rg[:, idx_sup] - slope*self.temperatures[:, idx_sup]
+            idx_sup = np.where(self.temperatures == np.min(self.temperatures[self.temperatures > Tc]))[0][0]
+            idx_inf = np.where(self.temperatures == np.max(self.temperatures[self.temperatures > Tc]))[0][0]
+            slope = (rg[idx_sup, :].mean() - rg[idx_inf, :].mean())/(self.temperatures[idx_sup] - self.temperatures[idx_inf])
+            intersect = rg[idx_sup, :].mean() - slope*self.temperatures[idx_sup]
             rgC = slope*Tc + intersect
-            self.axis.axvline(Tc, '--', label="T Critical")
-            self.axis.set_xticks(np.append(self.axis.get_xticks, Tc))
-            self.axis.axhline(rgC, '--', label="Rg Critical")
-            self.axis.set_yticks(np.append(self.axis.get_yticks, rgC))
+            phase_params = self.axis.scatter(Tc, rgC, s=80, color='firebrick', alpha=0.5)
+            leg = self.axis.legend([phase_params], [f"Phase Transition. Tc = {Tc:.0f}, Rgc = {rgC:.0f}"], loc=4, fontsize=self.label_fsize)
+            self.axis.add_artist(leg)
+            ylim = self.axis.get_ylim()
+            self.axis.set_ylim(ylim)
+            self.axis.axhspan(rgC, ylim[1], color="green", alpha=0.08)
+            self.axis.axhspan(ylim[0], rgC, color="red", alpha=0.08)
         pline, capline, barline = self.axis.errorbar(self.temperatures, rg.mean(axis=1), yerr=err_bars, uplims=True, lolims=True)
         capline[0].set_marker('_')
         capline[0].set_markersize(10)
@@ -315,7 +315,6 @@ class Plotter(analysis.Analysis):
         self.axis.plot(self.temperatures, florys, self.style, label=self.label)
         Tc = self.find_Tc(florys=florys)
         self.axis.axvline(Tc, ls='--', label='T Critical', alpha=0.4)
-        self.axis.set_xticks(np.append(self.axis.get_xticks(), Tc))
 
         pline, capline, barline = self.axis.errorbar(self.temperatures, florys, yerr=err, uplims=True, lolims=True)
         capline[0].set_marker('_')

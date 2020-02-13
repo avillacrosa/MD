@@ -37,6 +37,8 @@ class LMP:
         self.data = None
         self.lmp2pdb = '/home/adria/perdiux/src/lammps-7Aug19/tools/ch2lmp/lammps2pdb.pl'
 
+        self.chains, self.chain_atoms = self.get_n_chains()
+
     def get_lmp_dirs(self, path=None):
         if path is None:
             path = self.o_wd
@@ -185,21 +187,25 @@ class LMP:
     # TODO : TEST
     def get_n_chains(self):
         lmp_data = glob.glob(os.path.join(self.o_wd, '*.data'))
-        unit_atoms, n_atoms = 0, 0
+        unit_atoms, n_atoms, reading_atoms = 0, 0, False
         if lmp_data:
             with open(lmp_data[0], 'r') as data:
                 lines = data.readlines()
                 for line in lines:
-                    print(line)
                     if 'atoms' in line:
-                        unit_atoms = re.findall(r'\d+', line)
+                        n_atoms = int(re.findall(r'\d+', line)[0])
+                    if reading_atoms and line != '\n':
+                        if int(re.findall(r'\d+', line)[1])==1:
+                            unit_atoms += 1
+                        if int(re.findall(r'\d+', line)[1])!=1:
+                            reading_atoms=False
+                            break
                     if 'Atoms' in line:
-                        reading_lines = True
-                    if reading_lines and line != '':
-                        n_atoms += 1
-                        if 'Bonds' in line:
-                            reading_lines = False
-        return int(n_atoms/unit_atoms)
+                        reading_atoms = True
+                    if 'Bonds' in line:
+                        break
+        n_chains = int(n_atoms/unit_atoms)
+        return n_chains, unit_atoms
 
     # TODO : Maybe this at LMPSETUP???
     def charge_scramble(self, sequence, keep_positions=True, shuffles=1):

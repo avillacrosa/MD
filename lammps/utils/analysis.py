@@ -30,8 +30,10 @@ class Analysis(lmp.LMP):
         self.equilibration = 3e6
         super(Analysis, self).__init__(**kw)
 
-    def distance_map(self, use='md', contacts=False, temperature=None):
+    def distance_map(self, use='md', contacts=False, temperature=None, inter=False):
         # print("="*20, f"Calculating contact map using {use}", "="*20)
+        if inter and self.chains > 1:
+            return SystemError("Requesting interchain contacts but only 1 chain present")
         pdbs = self.make_initial_frame()
         topo = pdbs[0]
         contact_maps = []
@@ -59,16 +61,39 @@ class Analysis(lmp.LMP):
                 dframe = np.array(dframe)
                 contact_map = dframe.mean(0)
             elif use == 'md':
-                pairs = list(itertools.product(range(traj.top.n_atoms - 1), range(1, traj.top.n_atoms)))
-                d = md.compute_distances(traj, pairs)
-                d = md.geometry.squareform(d, pairs)
-                if contacts:
-                    dcop = np.copy(d)
-                    dcop[d < 0.6] = 1.
-                    dcop[d > 0.6] = 0.
-                    contact_map = dcop.mean(0)
+                if inter:
+                    dmaps_by_chain = np.zeros(shape=(self.chains, self.chains - 1, traj.n_frames, self.chain_atoms, self.chain_atoms))
+                    flat_pairs = list(itertools.product(range(self.chain_atoms), range(self.chain_atoms)))
+                    for c1 in range(self.chains):
+                        for c2 in range(self.chains):
+                            if c1 != c2:
+                                pairs = list(itertools.product(range(c1 * self.chain_atoms, (c1 + 1) * self.chain_atoms),
+                                                               range(c2 * self.chain_atoms, (c2 + 1) * self.chain_atoms)))
+                                d = md.compute_distances(traj, pairs)
+                                d = md.geometry.squareform(d, flat_pairs)
+                                if c2 > c1:
+                                    dmaps_by_chain[c1, c2 - 1, :, :, :] = d
+                                else:
+                                    dmaps_by_chain[c1, c2, :, :, :] = d
+                    d = dmaps_by_chain.min(axis=1).mean(axis=0)
+                    if contacts:
+                        dcop = np.copy(d)
+                        dcop[d < 0.6] = 1.
+                        dcop[d > 0.6] = 0.
+                        contact_map = dcop.mean(0)
+                    else:
+                        contact_map = d.mean(0) * 10
                 else:
-                    contact_map = d.mean(0) * 10
+                    pairs = list(itertools.product(range(traj.top.n_atoms - 1), range(1, traj.top.n_atoms)))
+                    d = md.compute_distances(traj, pairs)
+                    d = md.geometry.squareform(d, pairs)
+                    if contacts:
+                        dcop = np.copy(d)
+                        dcop[d < 0.6] = 1.
+                        dcop[d > 0.6] = 0.
+                        contact_map = dcop.mean(0)
+                    else:
+                        contact_map = d.mean(0) * 10
             else:
                 pool = mp.Pool()
                 ranges = np.linspace(0, traj.n_frames, mp.cpu_count() + 1, dtype='int')
@@ -308,17 +333,54 @@ class Analysis(lmp.LMP):
      # TODO : TEST
     def find_Tc(self, florys=None):
         temps = self.get_temperatures()
-        if florys is not None:
+        if florys is None:
             florys = self.flory_scaling_fit()[0]
         lim_inf = np.max(florys[florys < 0.5])
         lim_sup = np.min(florys[florys > 0.5])
         # TODO : FLOAT CONVERSION IN SELF.GET_TEMPERATURES()?
-        T_inf = float(temps[np.where(florys==lim_inf)[0][0]])
-        T_sup = float(temps[np.where(florys==lim_sup)[0][0]])
+        T_inf = float(temps[np.where(florys == lim_inf)[0][0]])
+        T_sup = float(temps[np.where(florys == lim_sup)[0][0]])
         slope = (lim_sup-lim_inf)/(T_sup-T_inf)
         intersect = lim_sup-slope*T_sup
         Tc = (0.5 - intersect)/slope
         return Tc
+
+    def chain_coms(self):
+        xtcs = self._temper_trj_reorder()
+        topo = self.make_initial_frame()[0]
+        sequence = self.get_seq_from_hps()
+        m_i = []
+        for aa in sequence:
+            m_i.append(self.residue_dict[aa]["mass"])
+        m_i = np.array(m_i)
+        M = np.sum(m_i)
+        # TODO : HARDCODED
+        coms = np.zeros(shape=(12, self.chains, 114, 3))
+        for T, xtc in enumerate(xtcs):
+            traj = md.load(xtc, top=topo)
+            for c in range(self.chains):
+                atidx = np.linspace(c*self.chain_atoms, (c+1)*self.chain_atoms, self.chain_atoms, endpoint=False, dtype=int)
+                tr = traj.atom_slice(atidx)
+                m_i_chain = m_i[c*self.chain_atoms:(c+1)*self.chain_atoms]
+                xyz = np.reshape(tr.xyz, (tr.xyz.shape[0], tr.xyz.shape[2], tr.xyz.shape[1]))
+                s = np.dot(xyz, m_i_chain)
+                com = s/M
+                coms[T, c, :] = com
+        return coms
+
+    # Cutoff in nanometers
+    def clusters(self, cutoff=5):
+        coms = self.chain_coms()
+        clust = np.zeros(shape=(self.chain_atoms, self.chain_atoms))
+        clust[0, 0] = 1
+        for com1 in coms:
+            current_cluster = np.where(clust[com1, :] == 1)[0][0]
+            print(current_cluster)
+            for com2 in coms:
+                distance = np.linalg.norm(com1-com2)
+                if distance < cutoff:
+                    clust[com2, current_cluster] = 1
+        print(clust)
 
 mpi_results = []
 
