@@ -5,7 +5,7 @@ atom_style  full
 
 bond_style  harmonic
 pair_style  ljlambda $debye 0.0 35.0
-dielectric  80.0
+dielectric  $water_perm
 
 read_data   data.data
 

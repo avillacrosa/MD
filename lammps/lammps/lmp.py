@@ -15,13 +15,9 @@ import scipy.constants as cnt
 class LMP:
     def __init__(self, oliba_wd, force_reorder=False):
         self.o_wd = oliba_wd
-        self.p_wd = oliba_wd.replace('/perdiux', '')
 
         self.lmp2pdb = '/home/adria/perdiux/src/lammps-7Aug19/tools/ch2lmp/lammps2pdb.pl'
         self.lmp = '/home/adria/local/lammps/bin/lmp'
-
-        self.hps_epsilon = 0.2
-        self.hps_pairs = None
 
         # Even if named "files" they are actually the lines of the files...
         self.data_file = self._get_data_file()
@@ -293,34 +289,6 @@ class LMP:
                     np.sqrt(2 * 10 ** 3 * cnt.Avogadro) * cnt.e)*(1/debye_wv)*10**-10)
         return sqrtI**2
 
-    def get_hps_pairs(self, from_file=None):
-        self._get_hps_params()
-        lines = ['pair_coeff          *       *       0.000000   0.000    0.000000   0.000   0.000\n']
-
-        if from_file:
-            lambda_gen = np.genfromtxt(from_file)
-            count = 0
-        else:
-            self._get_hps_params()
-        for i in range(len(self.key_ordering)):
-            for j in range(i, len(self.key_ordering)):
-                res_i = self.residue_dict[self.key_ordering[i]]
-                res_j = self.residue_dict[self.key_ordering[j]]
-                lambda_ij = (res_i["lambda"] + res_j["lambda"])/2
-                sigma_ij = (res_i["sigma"] + res_j["sigma"])/2
-                if from_file:
-                    lambda_ij = lambda_gen[count]
-                    count += 1
-                if res_i["q"] != 0 and res_j["q"] != 0:
-                    cutoff = 35.00
-                else:
-                    cutoff = 0.0
-                lambda_ij = lambda_ij * self.hps_scale
-                line = 'pair_coeff         {:2d}      {:2d}       {:.6f}   {:.3f}    {:.6f}  {:6.3f}  {:6.3f}\n'.format(
-                    i + 1, j + 1, self.hps_epsilon, sigma_ij, lambda_ij, 3 * sigma_ij, cutoff)
-                lines.append(line)
-        self.hps_pairs = lines
-
     def get_structures(self):
         if self.temper:
             dcds = self._temper_trj_reorder()
@@ -360,15 +328,6 @@ class LMP:
                 temper = True
                 break
         return temper
-
-    def _get_hps_params(self):
-        for key in self.residue_dict:
-            for lam_key in definitions.lambdas:
-                if self.residue_dict[key]["name"] == lam_key:
-                    self.residue_dict[key]["lambda"] = definitions.lambdas[lam_key]
-            for sig_key in definitions.sigmas:
-                if self.residue_dict[key]["name"] == sig_key:
-                    self.residue_dict[key]["sigma"] = definitions.sigmas[sig_key]
 
     # TODO : SLOW, PARALLELIZE ?
     def _temper_trj_reorder(self):
