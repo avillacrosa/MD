@@ -1,4 +1,3 @@
-/depured-lammps/default_output/
 /depured-lammps/.idea/
 /lammps/.idea
 .idea
@@ -133,4 +132,3 @@ dmypy.json
 # Pyre type checker
 .pyre/
 /profasi/.idea/
-/lammps/default_output/
