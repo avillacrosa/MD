@@ -62,8 +62,10 @@ class LMPSetup:
 
         self.rerun_dump = None
 
+        # TODO : GRACEFULLY HANDLE THIS...
         self.base_dir = f'{self.hps_scale:.1f}ls-{self.ionic_strength * 1e3:.0f}I-{self.water_perm:.0f}e'
-        self.out_dir = os.path.join(self.o_wd, self.base_dir)
+        # self.out_dir = os.path.join(self.o_wd, self.base_dir)
+        self.out_dir = self.o_wd
         self.job_name = f'x{self.chains}-{self.protein}_{self.base_dir}'
 
         pathlib.Path(self.out_dir).mkdir(parents=True, exist_ok=True)
@@ -180,8 +182,9 @@ class LMPSetup:
         os.chdir(old_wd)
         return out
 
+    # TODO : THIS CAN BE BETTER
     def write_hps_files(self, output_dir='default', equil=False, rerun=False, data=True, qsub=True, lmp=True,
-                        slurm=True):
+                        slurm=True, readme=True, rst=True):
         if output_dir == 'default':
             output_dir = self.out_dir
 
@@ -189,60 +192,70 @@ class LMPSetup:
         self._generate_qsub()
         self._generate_data_input()
         self._generate_slurm()
-        self._generate_README()
+        if readme:
+            self._generate_README()
         if self.xyz is not None:
             self._generate_pdb()
 
         if self.temper:
-            lmp_temp_file = open('../templates/replica/input_template.lmp')
+            lmp_temp_file = open('../data/templates/replica/input_template.lmp')
         elif equil:
-            lmp_temp_file = open('../templates/equilibration/input_template.lmp')
+            lmp_temp_file = open('../data//templates/equilibration/input_template.lmp')
         elif rerun:
-            lmp_temp_file = open('../templates/rerun/input_template.lmp')
+            lmp_temp_file = open('../data//templates/rerun/input_template.lmp')
         else:
-            lmp_temp_file = open('../templates/general/input_template.lmp')
+            lmp_temp_file = open('../data//templates/general/input_template.lmp')
 
         lmp_template = Template(lmp_temp_file.read())
         lmp_subst = lmp_template.safe_substitute(self.lmp_file_dict)
-        topo_temp_file = open('../templates/topo_template.data')
+        topo_temp_file = open('../data//templates/topo_template.data')
         topo_template = Template(topo_temp_file.read())
         topo_subst = topo_template.safe_substitute(self.topo_file_dict)
 
-        rst_temp_file = open('../templates/restart/input_template.lmp')
+        rst_temp_file = open('../data//templates/restart/input_template.lmp')
         rst_template = Template(rst_temp_file.read())
         rst_subst = rst_template.safe_substitute(self.lmp_file_dict)
 
-        qsub_temp_file = open('../templates/qsub_template.tmp')
+        qsub_temp_file = open('../data//templates/qsub_template.tmp')
         qsub_template = Template(qsub_temp_file.read())
         qsub_subst = qsub_template.safe_substitute(self.qsub_file_dict)
 
-        slurm_temp_file = open('../templates/slurm_template.tmp')
+        slurm_temp_file = open('../data//templates/slurm_template.tmp')
         slurm_template = Template(slurm_temp_file.read())
         slurm_subst = slurm_template.safe_substitute(self.slurm_file_dict)
 
-        with open(f'../temp/data.data', 'tw') as fileout:
-            fileout.write(topo_subst)
-        with open(f'../temp/{self.job_name}.qsub', 'tw') as fileout:
-            fileout.write(qsub_subst)
-        with open(f'../temp/lmp.lmp', 'tw') as fileout:
-            fileout.write(lmp_subst)
-        with open(f'../temp/rst.rst', 'tw') as fileout:
-            fileout.write(rst_subst)
-        with open(f'../temp/lmp.lmp', 'tw') as fileout:
-            fileout.write(lmp_subst)
-        with open(f'../temp/{self.job_name}.slm', 'tw') as fileout:
-            fileout.write(slurm_subst)
+        if data:
+            with open(f'../temp/data.data', 'tw') as fileout:
+                fileout.write(topo_subst)
+        if qsub:
+            with open(f'../temp/{self.job_name}.qsub', 'tw') as fileout:
+                fileout.write(qsub_subst)
+        if lmp:
+            with open(f'../temp/lmp.lmp', 'tw') as fileout:
+                fileout.write(lmp_subst)
+        if rst:
+            with open(f'../temp/rst.rst', 'tw') as fileout:
+                fileout.write(rst_subst)
+        if slurm:
+            with open(f'../temp/{self.job_name}.slm', 'tw') as fileout:
+                fileout.write(slurm_subst)
 
-        if output_dir is not '':
+        if os.path.abspath(output_dir) != os.path.abspath('../temp'):
             if data:
                 shutil.copyfile(f'../temp/data.data', os.path.join(output_dir, 'data.data'))
+                os.remove(f'../temp/data.data')
             if qsub:
                 shutil.copyfile(f'../temp/{self.job_name}.qsub', os.path.join(output_dir, f'{self.job_name}.qsub'))
+                os.remove(f'../temp/{self.job_name}.qsub')
             if slurm:
                 shutil.copyfile(f'../temp/{self.job_name}.slm', os.path.join(output_dir, f'{self.job_name}.slm'))
+                os.remove(f'../temp/{self.job_name}.slm')
             if lmp:
                 shutil.copyfile(f'../temp/lmp.lmp', os.path.join(output_dir, 'lmp.lmp'))
-                shutil.copyfile(f'../temp/rst.rst', os.path.join(output_dir, 'rst.rst'))
+                os.remove(f'../temp/lmp.lmp')
+            if rst:
+                shutil.copyfile(f'../temp/rst.rst', os.path.join(output_dir, 'rst.lmp'))
+                os.remove(f'../temp/rst.rst')
 
     def assert_build(self):
         asserter = lmp.LMP(oliba_wd=self.o_wd)
@@ -253,7 +266,8 @@ class LMPSetup:
         print("Assertion complete")
 
     def debye_length(self):
-        l = np.sqrt(cnt.epsilon_0 * self.water_perm * cnt.Boltzmann * self.temperature)
+        # TODO : INCORPORATE SELF.TEMPERATURES
+        l = np.sqrt(cnt.epsilon_0 * self.water_perm * cnt.Boltzmann * 300)
         l = l / (np.sqrt(2 * self.ionic_strength * 10 ** 3 * cnt.Avogadro) * cnt.e)
         return l
 
@@ -293,6 +307,7 @@ class LMPSetup:
                 if self.residue_dict[key]["name"] == sig_key:
                     self.residue_dict[key]["sigma"] = definitions.sigmas[sig_key]
 
+    # TODO : THIS ONLY IF WE HAVE self.xyz... Maybe I can make it general
     def _generate_pdb(self, display=None):
         abc = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
                'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u',
@@ -317,6 +332,8 @@ class LMPSetup:
                 xyz += f'ATOM  {c + 1:>5} {res_name:>4}   {res_name} {abc[n]} {i + 1:>3}    {coords[0]:>8.2f}{coords[1]:>8.2f}{coords[2]:>8.2f}  1.00  0.00      PROT \n'
                 c += 1
             xyz += 'TER \n'
+        for i in range(len(self.sequence) * self.chains):
+            if (i + 1) % len(self.sequence) != 0: print('CONECT{:>5}{:>5}'.format(i + 1, i + 2))
         bottom = 'END \n'
         with open('/home/adria/scripts/lammps/temp/test.pdb', 'w+') as f:
             f.write(header + xyz + bottom)
@@ -356,7 +373,7 @@ class LMPSetup:
         atoms, bonds = [], []
         k = 1
         spaghetti = False
-
+        xyzs = []
         for chain in range(1, self.chains + 1):
             # TODO CENTER SPAGHETTI BETTER...
             if self.xyz is None:
@@ -365,6 +382,7 @@ class LMPSetup:
             for aa in self.sequence:
                 if spaghetti:
                     xyz[0] += definitions.bond_length
+                    xyzs.append(xyz)
                 else:
                     xyz = self.xyz[0, k - 1, :]
                 atoms.append(f'      {k :3d}          {chain}    '
@@ -376,7 +394,8 @@ class LMPSetup:
                 if k != chain * (len(self.sequence)):
                     bonds.append(f'       {k:3d}       1       {k:3d}       {k + 1:3d}\n')
                 k += 1
-
+        if spaghetti:
+            self.xyz = np.array([xyzs])
         self.topo_file_dict["natoms"] = self.chains * len(self.sequence)
         self.topo_file_dict["nbonds"] = self.chains * (len(self.sequence) - 1)
         self.topo_file_dict["atom_types"] = len(self.residue_dict)
@@ -398,11 +417,11 @@ class LMPSetup:
 
     def _generate_slurm(self):
         if self.temper:
-            self.qsub_file_dict["command"] = f"srun `which lmp` -in lmp.lmp -partition {self.processors}x1"
+            self.slurm_file_dict["command"] = f"srun `which lmp` -in lmp.lmp -partition {self.processors}x1"
         else:
-            self.qsub_file_dict["command"] = f"srun `which lmp` -in lmp.lmp"
-        self.qsub_file_dict["np"] = self.processors
-        self.qsub_file_dict["jobname"] = self.job_name
+            self.slurm_file_dict["command"] = f"srun `which lmp` -in lmp.lmp"
+        self.slurm_file_dict["np"] = self.processors
+        self.slurm_file_dict["jobname"] = self.job_name
 
     def _generate_README(self):
         with open(os.path.join(self.o_wd, 'README.txt'), 'tw') as readme:

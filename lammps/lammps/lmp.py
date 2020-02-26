@@ -32,6 +32,8 @@ class LMP:
             self.chains, self.chain_atoms = self.get_n_chains()
             self.sequence = self.get_seq_from_hps()
             self.data = self.get_lmp_data()
+            self.protein = self.get_protein_from_sequence()
+            self.structures = None
 
     def get_lmp_dirs(self, path=None):
         if path is None:
@@ -42,19 +44,16 @@ class LMP:
         dirs.sort()
         return dirs
 
-    def _get_initial_frame(self, dirs=None):
-        if os.path.exists(os.path.join(self.o_wd, 'topo.pdb')):
-            return os.path.join(self.o_wd, 'topo.pdb')
-        else:
-            files = glob.glob(os.path.join(self.o_wd, '*.data'))
-            file = os.path.basename(files[0])
-            file = file.replace('.data', '')
-            lammps2pdb = self.lmp2pdb
-            os.system(lammps2pdb + ' ' + os.path.join(self.o_wd, file))
-            fileout = os.path.join(self.o_wd, file) + '_trj.pdb'
-            return fileout
+    def get_protein_from_sequence(self):
+        sequence = self.get_seq_from_hps()
+        stored_seqs = glob.glob(os.path.join('../data/sequences/*.seq'))
+        for seq_path in stored_seqs:
+            with open(seq_path, 'r') as seq_file:
+                seq = seq_file.readlines()[0]
+                if sequence.replace('L', 'I') == seq.replace('L', 'I'):
+                    protein = os.path.basename(seq_path).replace('.seq','')
+                    return protein
 
-    # TODO : SHOULD I REORDER THIS???
     def get_lmp_data(self, progress=False):
         data, data_ends, prog = [], [], []
         dstart = 0
@@ -84,10 +83,6 @@ class LMP:
         if progress:
             print(f"Run Completed at {ran_steps/np.array(prog).mean()*100:.2f} %")
         return data
-
-    def get_lmp_E(self):
-        E = self.data[:, :, [1, 2]]
-        return E
 
     def get_eps(self):
         eps = 0
@@ -206,8 +201,6 @@ class LMP:
             if len(plus) != 0 or len(minus) != 0:
                 f_plus_i = np.count_nonzero(iplus > 0) / g
                 f_minus_i = np.count_nonzero(iminus < 0) / g
-                # print(np.count_nonzero(iplus > 0))
-                # print(f_minus_i)
                 sigma_i = (f_plus_i - f_minus_i) ** 2 / (f_plus_i + f_minus_i)
                 delta += (sigma_i - sigma) ** 2 / N
         return delta
@@ -295,8 +288,23 @@ class LMP:
             dcds = sorted(dcds, key=lambda x: int(re.findall(r'\d+', os.path.basename(x))[0]))
         structures = []
         for dcd in dcds:
-            structures.append(md.load(dcd, top=self.topology_path))
+            tr = md.load(dcd, top=self.topology_path)
+            # TODO : BIG TROUBLEEEE: VERY BIG!
+            tr = tr[::10]
+            structures.append(tr)
         return structures
+
+    def _get_initial_frame(self):
+        if os.path.exists(os.path.join(self.o_wd, 'topo.pdb')):
+            return os.path.join(self.o_wd, 'topo.pdb')
+        else:
+            files = glob.glob(os.path.join(self.o_wd, '*.data'))
+            file = os.path.basename(files[0])
+            file = file.replace('.data', '')
+            lammps2pdb = self.lmp2pdb
+            os.system(lammps2pdb + ' ' + os.path.join(self.o_wd, file))
+            fileout = os.path.join(self.o_wd, file) + '_trj.pdb'
+            return fileout
 
     def _get_hps_params(self):
         for key in self.residue_dict:
@@ -336,45 +344,60 @@ class LMP:
                 break
         return temper
 
-    # TODO : SLOW, PARALLELIZE ?
-    # TODO : STILL NEEDS TO BE CLEANED
-    def _temper_trj_reorder(self):
-        def _get_temper_switches():
-            # Temper runs are single file
-            log_lmp = open(os.path.join(self.o_wd, 'log.lammps'), 'r')
-            lines = log_lmp.readlines()
-            T_start = 0
-            T_end = len(lines)
+    def _data_reorder(self):
+        # if not self.temper:
+        #     return self.data
+        reordered_data = np.zeros_like(self.data)
+        temp_log = self._get_temper_switches()
+        runner, trj_frame_incr = self._get_swap_rates()
+        c = 0
+        for i in range(0, temp_log.shape[0], runner):
+            if runner != 1:
+                cr = slice(c, c+1, 1)
+                c += 1
+            else:
+                cr = slice(trj_frame_incr*(i), trj_frame_incr*(i+1), 1)
+            for Ti, T in enumerate(temp_log[i, 1:]):
+                reordered_data[T, cr, :] = self.data[Ti, cr, :]
+        return reordered_data
+
+    def _get_temper_switches(self):
+        if not self.temper:
+            return
+        with open(os.path.join(self.o_wd, 'log.lammps'), 'r') as temp_switches:
+            lines = temp_switches.readlines()
+            T_start, T_end = 0, len(lines)
             for x, line in enumerate(lines):
                 if 'Step' in line:
                     T_start = x + 1
                     break
-            in_temp_log = np.loadtxt(os.path.join(self.o_wd, 'log.lammps'), skiprows=T_start, max_rows=T_end - T_start,
-                               dtype='int')
-            return in_temp_log
+            in_temp_log = np.genfromtxt(lines[T_start:T_end], dtype='int')
+        return in_temp_log
 
-        if not self.force_reorder:
-            if glob.glob(os.path.join(self.o_wd, '*reorder*')):
-                print("Omitting temper reordering (reorder files already present)")
-                xtcs = glob.glob(os.path.join(self.o_wd, '*reorder*'))
-                xtcs = sorted(xtcs, key=lambda x: int(re.findall(r'\d+', os.path.basename(x))[0]))
-                return xtcs
-
-        temp_log = _get_temper_switches()
-
-        # !!!!!!!!! Assuming dump frequency is the same as thermo frequence !!!!!!!!!
-        self.data = self.get_lmp_temper_data(progress=False)
-
+    def _get_swap_rates(self):
+        # TODO : INCOHERENT AMB LA RESTA DEL CODI... (La resta definim un self.something i l'usem no l'anem cridant dins les funcions)
+        temp_log = self._get_temper_switches()
         T_swap_rate = temp_log[1, 0] - temp_log[0, 1]
         traj_save_rate = int(self.data[0, 1, 0] - self.data[0, 0, 0])
         if traj_save_rate < T_swap_rate:
-            trj_frame_incr = int(T_swap_rate/traj_save_rate)
+            trj_frame_incr = int(T_swap_rate / traj_save_rate)
             runner = 1
         else:
             trj_frame_incr = 1
-            runner = int(traj_save_rate/T_swap_rate)
+            runner = int(traj_save_rate / T_swap_rate)
+        return runner, trj_frame_incr
 
-        top = self.make_initial_frame()[0]
+    # TODO : SLOW, PARALLELIZE ?
+    def _temper_trj_reorder(self):
+        self.data = self._data_reorder()
+        if not self.force_reorder:
+            if glob.glob(os.path.join(self.o_wd, '*reorder*.dcd')):
+                xtcs = glob.glob(os.path.join(self.o_wd, '*reorder*.dcd'))
+                xtcs = sorted(xtcs, key=lambda x: int(re.findall(r'\d+', os.path.basename(x))[0]))
+                return xtcs
+
+        temp_log = self._get_temper_switches()
+        runner, trj_frame_incr = self._get_swap_rates()
 
         xtcs = glob.glob(os.path.join(self.o_wd, '*.dcd*'))
         if not xtcs:
@@ -383,46 +406,64 @@ class LMP:
             raise SystemError("No trajectory files to read (attempted .xtc and .dcs)")
         xtcs = sorted(xtcs, key=lambda x: int(re.findall(r'\d+', os.path.basename(x))[0]))
 
-        reordered_data = np.zeros_like(self.data)
-
         trajs, trajs_xyz = [], []
         nmin = []
         for xtc in xtcs:
-            tr = md.load(xtc, top=top)
+            tr = md.load(xtc, top=self._get_initial_frame())
             nmin.append(tr.n_frames)
             trajs.append(tr)
             trajs_xyz.append(tr.xyz)
-        # IN CASE SIMULATION HAS NOT FINISHED, FORCE SAME NUMBER OF FRAMES BETWEEN REPLICAS
+
+        # TODO : IN CASE SIMULATION HAS NOT FINISHED, FORCE SAME NUMBER OF FRAMES BETWEEN REPLICAS
         for k, tr in enumerate(trajs):
             trajs[k] = tr[:np.array(nmin).min()]
         reordered_trajs = np.zeros(shape=(len(trajs), trajs[0].n_frames, trajs[0].n_atoms, 3))
+
         c = 0
-        # TODO: Time consuming...
+        # TODO: Time consuming... Parallelizable ?
         for i in range(0, temp_log.shape[0], runner):
-            print(f'Swapping progress : {i/temp_log.shape[0]*100.:.2f} %', end='\r')
             if runner != 1:
                 cr = slice(c, c+1, 1)
                 c += 1
             else:
-                #TODO MIGHT BLOW UP ?
                 cr = slice(trj_frame_incr*(i), trj_frame_incr*(i+1), 1)
             for Ti, T in enumerate(temp_log[i, 1:]):
-                reordered_data[T, cr, :] = self.data[Ti, cr, :]
                 reordered_trajs[T, cr, :, :] = trajs[Ti][cr].xyz
+            print(f'Swapping progress : {i / temp_log.shape[0] * 100.:.2f} %', end='\r')
+        print(" "*40, end='\r')
 
-        print('\r', end='\r')
         for i, rtrj in enumerate(reordered_trajs):
             trajs[i].xyz = rtrj
 
         xtc_paths = []
         for k in range(len(trajs)):
-            f = f'../default_output/reorder-{k}.xtc'
-            xtc_paths.append(os.path.abspath(f))
-            # trajs[k].save_xtc(f)
-            trajs[k].save_lammpstrj(f)
-            # shutil.copyfile(f, os.path.join(self.o_wd, f'reorder-{k}.xtc'))
-            shutil.copyfile(f, os.path.join(self.o_wd, f'reorder-{k}.lammpstrj'))
-        self.data = reordered_data
-        print(reordered_data.shape)
-        np.savetxt('../default_output/datareorder.lammps', reordered_data[0,:,:])
+            dcd = f'../temp/reorder-{k}.dcd'
+            lammpstrj = f'../temp/reorder-{k}.lammpstrj'
+            xtc_paths.append(os.path.abspath(dcd))
+            trajs[k].save_dcd(dcd)
+            self.save_lammpstrj(trajs[k], k)
+            shutil.copyfile(dcd, os.path.join(self.o_wd, f'reorder-{k}.dcd'))
+            shutil.copyfile(lammpstrj, os.path.join(self.o_wd, f'reorder-{k}.lammpstrj'))
         return xtc_paths
+
+    def save_lammpstrj(self, traj, T):
+        time = int(self.data[T, :, 0].max())
+        save_step = int(self.data[0, 1, 0] - self.data[0, 0, 0])
+        f = ''
+        frame = 0
+        for t in range(0, time+save_step, save_step):
+            f += f'ITEM: TIMESTEP \n'
+            f += f'{t} \n'
+            f += f'ITEM: NUMBER OF ATOMS \n'
+            f += f'{traj.n_atoms} \n'
+            f += f'ITEM: BOX BOUNDS pp pp pp \n'
+            for b in range(0, 3):
+                f += f'-{2500:.12e} {2500:.12e} \n'
+            # f += f'ITEM: ATOMS id type xs ys zs \n'
+            f += f'ITEM: ATOMS id type x y z \n'
+            for i, aa in enumerate(self.sequence):
+                xyz = traj.xyz[frame, i, :]*10
+                f += f'{i+1} {self.residue_dict[aa]["id"]} {xyz[0]:.5f} {xyz[1]:.5f} {xyz[2]:.5f} \n'
+            frame += 1
+        with open(f'../temp/reorder-{T}.lammpstrj', 'tw') as lmpfile:
+            lmpfile.write(f)
