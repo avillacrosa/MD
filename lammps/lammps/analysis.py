@@ -26,7 +26,7 @@ class Analysis(lmp.LMP):
         if self.o_wd is not None:
             self.structures = self.get_structures()
 
-    def intra_distance_map(self, use='md', contacts=False, temperature=None):
+    def intra_distance_map(self, contacts=False, temperature=None):
         structures = self.structures.copy()
         contact_maps = []
         if temperature is not None:
@@ -42,17 +42,20 @@ class Analysis(lmp.LMP):
             contact_maps.append(contact_map)
         return np.array(contact_maps)
 
-    def inter_distance_map(self, use='md', contacts=False, temperature=None):
+    def inter_distance_map(self, contacts=False, temperature=None):
         if self.chains == 1:
             raise SystemError("Demanded interchain distances but only a single chain is present!")
         structures = self.structures.copy()
         contact_maps = []
         if temperature is not None:
             structures = [structures[temperature]]
-        for traj in structures:
+        # for traj in structures:
+        self.chains = 2
+        for traj in structures[0:2]:
             flat_pairs = list(itertools.product(range(self.chain_atoms), range(self.chain_atoms)))
             dmaps_by_chain = np.zeros(shape=(self.chains, self.chain_atoms, self.chain_atoms), dtype='float32')
-            for frame in enumerate(traj.n_frames):
+            # for frame in range(traj.n_frames):
+            for frame in range(2):
                 for c1 in range(self.chains):
                     dcm = np.zeros(shape=(self.chains, self.chains-1, self.chain_atoms, self.chain_atoms))
                     for c2 in range(self.chains):
@@ -61,6 +64,7 @@ class Analysis(lmp.LMP):
                                                            range(c2 * self.chain_atoms, (c2 + 1) * self.chain_atoms)))
                             d = md.compute_distances(traj[frame], pairs, opt=False)
                             d = md.geometry.squareform(d, flat_pairs)*10
+                            print(d)
                             if contacts:
                                 d = mda.contacts.contact_matrix(d, radius=6)
                             if c2 > c1:
@@ -161,8 +165,10 @@ class Analysis(lmp.LMP):
         return np.array(rgs)
 
     def minimize_I_ls(self, a_dir, b_dir, temp_dir='/home/adria/scripts/lammps/temp'):
+        # TODO HANDLE IF B > A
         above_tc = Analysis(oliba_wd=a_dir)
         below_tc = Analysis(oliba_wd=b_dir)
+
 
         def trim_warnings(f):
             with open(f, 'r+') as file:
@@ -173,12 +179,12 @@ class Analysis(lmp.LMP):
                         file.write(line)
                 file.truncate()
 
-        def rg_rerun(T, ls, I, protein_object):
-            Ei = protein_object.data[T, :, 1]
+        def rg_rerun(T, ls, I, protein_object, data_dir):
+            Ei = protein_object.data[T, :, 1][::200]
             rgi = protein_object.rg(use='md')[T, :]
             protein = protein_object.protein
-            shutil.copyfile(os.path.join(a_dir, 'data.data'), os.path.join(temp_dir, f'data.data'))
-            shutil.copyfile(os.path.join(a_dir, f'reorder-{T}.lammpstrj'), os.path.join(temp_dir, f'atom_traj_{protein}.lammpstrj'))
+            shutil.copyfile(os.path.join(data_dir, 'data.data'), os.path.join(temp_dir, f'data.data'))
+            shutil.copyfile(os.path.join(data_dir, f'reorder-{T}.lammpstrj'), os.path.join(temp_dir, f'atom_traj_{protein}.lammpstrj'))
             rerun = lmpsetup.LMPSetup(oliba_wd=temp_dir, protein=protein, temper=False)
             rerun.ionic_strength = I
             rerun.hps_scale = ls
@@ -186,29 +192,34 @@ class Analysis(lmp.LMP):
             rerun.t = int(np.max(protein_object.get_lmp_data()[T, :, 0]))
             rerun.rerun_dump = f'atom_traj_{protein}.lammpstrj'
             rerun.get_hps_pairs()
+            rerun.rerun_skip = 200
             rerun.temperature = protein_object.get_temperatures()[T]
             rerun.write_hps_files(rerun=True, data=False, qsub=False, slurm=False, readme=False, rst=False)
             rerun.run(file=os.path.join(rerun.out_dir, 'lmp.lmp'), n_cores=4)
 
             rerun_analysis = Analysis(oliba_wd=temp_dir)
-            rerun_energy = rerun_analysis.data[0, :, 1]
+            Ef = rerun_analysis.data[0, :, 1]
 
-            weights = rerun_analysis.weights(Ei=Ei, Ef=rerun_energy, T=protein_object.get_temperatures()[T])
+            # INCORRECT EF.SHAPE ?
+
+            weights = rerun_analysis.weights(Ei=Ei, Ef=Ef, T=protein_object.get_temperatures()[T])
             weights = weights/np.sum(weights)
             reweight_rg = np.dot(rgi, weights.T)
-            print("RGI, REWRG", rgi.mean(), reweight_rg)
             return reweight_rg
 
         def cost(x, T):
             T = T[0]
             I, ls = x[0], x[1]
-            rw_above_rg = rg_rerun(T=T, ls=ls, I=I, protein_object=above_tc)
-            rw_below_rg = rg_rerun(T=T, ls=ls, I=I, protein_object=below_tc)
+            rw_above_rg = rg_rerun(T=T, ls=ls, I=I, protein_object=above_tc, data_dir=a_dir)
+            rw_below_rg = rg_rerun(T=T, ls=ls, I=I, protein_object=below_tc, data_dir=b_dir)
+            print(f"FOR {ls} {I} above rg = {rw_above_rg} and below rg = {rw_below_rg}")
             c = rw_above_rg - rw_below_rg + (rw_below_rg - mean_rg + rw_above_rg - mean_rg)**2
             return c
 
         # TEST
         T = 6
+        print(above_tc.rg(use='md').mean(axis=1)[T])
+        print(below_tc.rg(use='md').mean(axis=1)[T])
         mean_rg = (above_tc.rg(use='md').mean(axis=1)+below_tc.rg(use='md').mean(axis=1))/2
         mean_rg = mean_rg[T]
 

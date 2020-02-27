@@ -52,6 +52,8 @@ class LMPSetup:
 
         self.debye_wv = 1 / self.debye_length()
         self.swap_every = 1000
+
+        self.rerun_skip = 0
         # ----
 
         self.topo_file_dict = {}
@@ -134,7 +136,6 @@ class LMPSetup:
         if self.chains == 1:
             self.xyz = struct.xyz * 10
             self.box_size = d * 10
-            struct.save_pdb('../temp/centered.pdb')
         else:
             # TEST
             n_cells = int(math.ceil(self.chains ** (1 / 3)))
@@ -164,7 +165,6 @@ class LMPSetup:
 
             self.box_size = d * 10
             self.xyz = system.xyz * 10
-            system.save_pdb('../temp/double_eq.pdb')
 
     def run(self, file, n_cores=1):
         f_name = os.path.join(self.o_wd, file)
@@ -224,6 +224,7 @@ class LMPSetup:
         slurm_template = Template(slurm_temp_file.read())
         slurm_subst = slurm_template.safe_substitute(self.slurm_file_dict)
 
+        # TODO: USELESS SAVE IN TEMP FOLDER...
         if data:
             with open(f'../temp/data.data', 'tw') as fileout:
                 fileout.write(topo_subst)
@@ -234,7 +235,7 @@ class LMPSetup:
             with open(f'../temp/lmp.lmp', 'tw') as fileout:
                 fileout.write(lmp_subst)
         if rst:
-            with open(f'../temp/rst.rst', 'tw') as fileout:
+            with open(f'../temp/rst.lmp', 'tw') as fileout:
                 fileout.write(rst_subst)
         if slurm:
             with open(f'../temp/{self.job_name}.slm', 'tw') as fileout:
@@ -254,8 +255,8 @@ class LMPSetup:
                 shutil.copyfile(f'../temp/lmp.lmp', os.path.join(output_dir, 'lmp.lmp'))
                 os.remove(f'../temp/lmp.lmp')
             if rst:
-                shutil.copyfile(f'../temp/rst.rst', os.path.join(output_dir, 'rst.lmp'))
-                os.remove(f'../temp/rst.rst')
+                shutil.copyfile(f'../temp/rst.lmp', os.path.join(output_dir, 'rst.lmp'))
+                os.remove(f'../temp/rst.lmp')
 
     def assert_build(self):
         asserter = lmp.LMP(oliba_wd=self.o_wd)
@@ -308,6 +309,8 @@ class LMPSetup:
                     self.residue_dict[key]["sigma"] = definitions.sigmas[sig_key]
 
     # TODO : THIS ONLY IF WE HAVE self.xyz... Maybe I can make it general
+    # TODO : THIS SEEMS TO BREAK DOWN IF WE SPAGHETTI...
+    # TODO : ALSO THIS IS NOT CENTERED FOR SINGLE CHAIN!!!!
     def _generate_pdb(self, display=None):
         abc = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
                'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u',
@@ -332,13 +335,14 @@ class LMPSetup:
                 xyz += f'ATOM  {c + 1:>5} {res_name:>4}   {res_name} {abc[n]} {i + 1:>3}    {coords[0]:>8.2f}{coords[1]:>8.2f}{coords[2]:>8.2f}  1.00  0.00      PROT \n'
                 c += 1
             xyz += 'TER \n'
+        bonds = ''
         for i in range(len(self.sequence) * self.chains):
-            if (i + 1) % len(self.sequence) != 0: print('CONECT{:>5}{:>5}'.format(i + 1, i + 2))
+            if (i + 1) % len(self.sequence) != 0: bonds += 'CONECT{:>5}{:>5} \n'.format(i + 1, i + 2)
         bottom = 'END \n'
-        with open('/home/adria/scripts/lammps/temp/test.pdb', 'w+') as f:
-            f.write(header + xyz + bottom)
-        shutil.copyfile('/home/adria/scripts/lammps/temp/test.pdb', os.path.join(self.o_wd, f'topo.pdb'))
+        with open(os.path.join(self.o_wd, f'topo.pdb'), 'w+') as f:
+            f.write(header + xyz + bonds + bottom)
 
+    # TODO : THIS STUFF MIGHT BE A BIT USELESS... MAYBE DOABLE AT INIT
     def _generate_lmp_input(self):
         if self.hps_pairs is None:
             self.get_hps_pairs()
@@ -353,6 +357,7 @@ class LMPSetup:
         self.lmp_file_dict["water_perm"] = self.water_perm
         self.lmp_file_dict["swap_every"] = self.swap_every
         self.lmp_file_dict["save"] = self.save
+        self.lmp_file_dict["rerun_skip"] = self.rerun_skip
         if int(self.t / 10000) != 0:
             self.lmp_file_dict["restart"] = int(self.t / 10000)
         else:

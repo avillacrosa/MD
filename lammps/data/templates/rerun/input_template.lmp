@@ -30,5 +30,4 @@ thermo        $save
 thermo_style  custom step pe ke temp c_rg
 thermo_modify flush yes
 
-#rerun           $rerun_dump dump x y z
-rerun           $rerun_dump last $t dump x y z
+rerun           $rerun_dump skip $rerun_skip dump x y z

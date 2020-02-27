@@ -290,7 +290,7 @@ class LMP:
         for dcd in dcds:
             tr = md.load(dcd, top=self.topology_path)
             # TODO : BIG TROUBLEEEE: VERY BIG!
-            tr = tr[::10]
+            tr = tr[::200]
             structures.append(tr)
         return structures
 
@@ -437,13 +437,10 @@ class LMP:
 
         xtc_paths = []
         for k in range(len(trajs)):
-            dcd = f'../temp/reorder-{k}.dcd'
-            lammpstrj = f'../temp/reorder-{k}.lammpstrj'
+            dcd = os.path.join(self.o_wd, f'reorder-{k}.dcd')
             xtc_paths.append(os.path.abspath(dcd))
             trajs[k].save_dcd(dcd)
             self.save_lammpstrj(trajs[k], k)
-            shutil.copyfile(dcd, os.path.join(self.o_wd, f'reorder-{k}.dcd'))
-            shutil.copyfile(lammpstrj, os.path.join(self.o_wd, f'reorder-{k}.lammpstrj'))
         return xtc_paths
 
     def save_lammpstrj(self, traj, T):
@@ -459,11 +456,10 @@ class LMP:
             f += f'ITEM: BOX BOUNDS pp pp pp \n'
             for b in range(0, 3):
                 f += f'-{2500:.12e} {2500:.12e} \n'
-            # f += f'ITEM: ATOMS id type xs ys zs \n'
             f += f'ITEM: ATOMS id type x y z \n'
             for i, aa in enumerate(self.sequence):
                 xyz = traj.xyz[frame, i, :]*10
                 f += f'{i+1} {self.residue_dict[aa]["id"]} {xyz[0]:.5f} {xyz[1]:.5f} {xyz[2]:.5f} \n'
             frame += 1
-        with open(f'../temp/reorder-{T}.lammpstrj', 'tw') as lmpfile:
+        with open(os.path.join(self.o_wd, f'reorder-{T}.lammpstrj'), 'tw') as lmpfile:
             lmpfile.write(f)
