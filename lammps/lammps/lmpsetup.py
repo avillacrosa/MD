@@ -184,14 +184,18 @@ class LMPSetup:
 
     # TODO : THIS CAN BE BETTER
     def write_hps_files(self, output_dir='default', equil=False, rerun=False, data=True, qsub=True, lmp=True,
-                        slurm=True, readme=True, rst=True):
+                        slurm=False, readme=False, rst=False):
         if output_dir == 'default':
             output_dir = self.out_dir
+
+        if self.temper:
+            self.processors = len(self.temperatures)
 
         self._generate_lmp_input()
         self._generate_qsub()
         self._generate_data_input()
         self._generate_slurm()
+        
         if readme:
             self._generate_README()
         if self.xyz is not None:
