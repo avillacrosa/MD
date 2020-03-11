@@ -18,10 +18,10 @@ class LMPSetup:
         self.p_wd = oliba_wd.replace('/perdiux', '')
         self.temper = temper
 
-        self.lmp = '/home/adria/local/lammps/bin/lmp'
+        self.lmp = definitions.lmp
 
         self.processors = 12
-        with open(os.path.join('../data/sequences', f'{protein}.seq')) as f:
+        with open(os.path.join(definitions.hps_data_dir, f'sequences/{protein}.seq')) as f:
             self.sequence = f.readlines()[0]
 
         self.chains = chains
@@ -47,13 +47,15 @@ class LMPSetup:
 
         self.v_seed = 494211
         self.langevin_seed = 451618
-        self.save = 50000
+        self.save = 5000
         self.langevin_damp = 10000
 
         self.debye_wv = 1 / self.debye_length()
         self.swap_every = 1000
 
         self.rerun_skip = 0
+        self.rerun_start = 0
+        self.rerun_stop = 0
         # ----
 
         self.topo_file_dict = {}
@@ -102,15 +104,15 @@ class LMPSetup:
         self.key_ordering = ordered_keys
 
     def get_equilibration_xyz(self, save=False, t=100000):
-        lmp2pdb = '/home/adria/perdiux/src/lammps-7Aug19/tools/ch2lmp/lammps2pdb.pl'
-        meta_maker = LMPSetup(oliba_wd='../temp', protein=self.protein, temper=self.temper)
+        lmp2pdb = definitions.lmp2pdb
+        meta_maker = LMPSetup(oliba_wd= os.path.join(definitions.module_dir, 'temp'), protein=self.protein, temper=self.temper)
         meta_maker.t = t
         meta_maker.get_hps_pairs()
         meta_maker.write_hps_files(output_dir='', equil=True)
         meta_maker.run('lmp.lmp', n_cores=8)
 
-        os.chdir('/home/adria/scripts/depured-lammps/temp')
-        file = '../temp/data'
+        os.chdir(os.path.join(definitions.module_dir, 'temp'))
+        file = os.path.join(definitions.module_dir, 'temp/data')
         os.system(lmp2pdb + ' ' + file)
         fileout = file + '_trj.pdb'
 
@@ -123,8 +125,8 @@ class LMPSetup:
             print(f"-> Saving equilibration pdb at {os.path.join(self.out_dir, 'equilibration.pdb')}")
             traj[-1].save_pdb(os.path.join(self.out_dir, 'equilibration.pdb'))
         else:
-            print(f"-> Saving equilibration pdb at {os.path.join('../temp', 'equilibration.pdb')}")
-            traj[-1].save_pdb(os.path.join('../temp', 'equilibration.pdb'))
+            print(f"-> Saving equilibration pdb at {os.path.join(definitions.module_dir, 'temp/equilibration.pdb')}")
+            traj[-1].save_pdb(os.path.join(definitions.module_dir, 'temp/equilibration.pdb'))
 
     def get_pdb_xyz(self, pdb, padding=0.55):
         struct = md.load_pdb(pdb)
@@ -184,7 +186,7 @@ class LMPSetup:
 
     # TODO : THIS CAN BE BETTER
     def write_hps_files(self, output_dir='default', equil=False, rerun=False, data=True, qsub=True, lmp=True,
-                        slurm=False, readme=False, rst=False):
+                        slurm=False, readme=False, rst=True):
         if output_dir == 'default':
             output_dir = self.out_dir
 
@@ -195,72 +197,56 @@ class LMPSetup:
         self._generate_qsub()
         self._generate_data_input()
         self._generate_slurm()
-        
+
         if readme:
             self._generate_README()
         if self.xyz is not None:
             self._generate_pdb()
 
         if self.temper:
-            lmp_temp_file = open('../data/templates/replica/input_template.lmp')
+            lmp_temp_file = open(os.path.join(definitions.module_dir, 'templates/replica/input_template.lmp'))
         elif equil:
-            lmp_temp_file = open('../data//templates/equilibration/input_template.lmp')
+            lmp_temp_file = open(os.path.join(definitions.module_dir, 'templates/equilibration/input_template.lmp'))
         elif rerun:
-            lmp_temp_file = open('../data//templates/rerun/input_template.lmp')
+            lmp_temp_file = open(os.path.join(definitions.module_dir, 'templates/rerun/input_template.lmp'))
         else:
-            lmp_temp_file = open('../data//templates/general/input_template.lmp')
+            lmp_temp_file = open(os.path.join(definitions.module_dir, 'templates/general/input_template.lmp'))
 
         lmp_template = Template(lmp_temp_file.read())
         lmp_subst = lmp_template.safe_substitute(self.lmp_file_dict)
-        topo_temp_file = open('../data//templates/topo_template.data')
+
+        topo_temp_file = open(os.path.join(definitions.module_dir, 'templates/replica/topo_template.data'))
         topo_template = Template(topo_temp_file.read())
         topo_subst = topo_template.safe_substitute(self.topo_file_dict)
 
-        rst_temp_file = open('../data//templates/restart/input_template.lmp')
+        rst_temp_file = open(os.path.join(definitions.module_dir, 'templates/restart/input_template.lmp'))
         rst_template = Template(rst_temp_file.read())
         rst_subst = rst_template.safe_substitute(self.lmp_file_dict)
 
-        qsub_temp_file = open('../data//templates/qsub_template.tmp')
+        qsub_temp_file = open(os.path.join(definitions.module_dir, 'templates/qsub_template.tmp'))
         qsub_template = Template(qsub_temp_file.read())
         qsub_subst = qsub_template.safe_substitute(self.qsub_file_dict)
 
-        slurm_temp_file = open('../data//templates/slurm_template.tmp')
+        slurm_temp_file = open(os.path.join(definitions.module_dir, 'templates/slurm_template.tmp'))
         slurm_template = Template(slurm_temp_file.read())
         slurm_subst = slurm_template.safe_substitute(self.slurm_file_dict)
 
-        # TODO: USELESS SAVE IN TEMP FOLDER...
-        if data:
-            with open(f'../temp/data.data', 'tw') as fileout:
-                fileout.write(topo_subst)
-        if qsub:
-            with open(f'../temp/{self.job_name}.qsub', 'tw') as fileout:
-                fileout.write(qsub_subst)
-        if lmp:
-            with open(f'../temp/lmp.lmp', 'tw') as fileout:
-                fileout.write(lmp_subst)
-        if rst:
-            with open(f'../temp/rst.lmp', 'tw') as fileout:
-                fileout.write(rst_subst)
-        if slurm:
-            with open(f'../temp/{self.job_name}.slm', 'tw') as fileout:
-                fileout.write(slurm_subst)
-
-        if os.path.abspath(output_dir) != os.path.abspath('../temp'):
+        if os.path.abspath(output_dir):
             if data:
-                shutil.copyfile(f'../temp/data.data', os.path.join(output_dir, 'data.data'))
-                os.remove(f'../temp/data.data')
+                with open(os.path.join(output_dir, 'data.data'), 'tw') as fileout:
+                    fileout.write(topo_subst)
             if qsub:
-                shutil.copyfile(f'../temp/{self.job_name}.qsub', os.path.join(output_dir, f'{self.job_name}.qsub'))
-                os.remove(f'../temp/{self.job_name}.qsub')
+                with open(os.path.join(output_dir, f'{self.job_name}.qsub'), 'tw') as fileout:
+                    fileout.write(qsub_subst)
             if slurm:
-                shutil.copyfile(f'../temp/{self.job_name}.slm', os.path.join(output_dir, f'{self.job_name}.slm'))
-                os.remove(f'../temp/{self.job_name}.slm')
+                with open(os.path.join(output_dir, f'{self.job_name}.slm'), 'tw') as fileout:
+                    fileout.write(slurm_subst)
             if lmp:
-                shutil.copyfile(f'../temp/lmp.lmp', os.path.join(output_dir, 'lmp.lmp'))
-                os.remove(f'../temp/lmp.lmp')
+                with open(os.path.join(output_dir, 'lmp.lmp'), 'tw') as fileout:
+                    fileout.write(lmp_subst)
             if rst:
-                shutil.copyfile(f'../temp/rst.lmp', os.path.join(output_dir, 'rst.lmp'))
-                os.remove(f'../temp/rst.lmp')
+                with open(os.path.join(output_dir, 'rst.lmp'), 'tw') as fileout:
+                    fileout.write(rst_subst)
 
     def assert_build(self):
         asserter = lmp.LMP(oliba_wd=self.o_wd)
@@ -362,6 +348,8 @@ class LMPSetup:
         self.lmp_file_dict["swap_every"] = self.swap_every
         self.lmp_file_dict["save"] = self.save
         self.lmp_file_dict["rerun_skip"] = self.rerun_skip
+        self.lmp_file_dict["rerun_start"] = self.rerun_start
+        self.lmp_file_dict["rerun_stop"] = self.rerun_stop
         if int(self.t / 10000) != 0:
             self.lmp_file_dict["restart"] = int(self.t / 10000)
         else:
@@ -391,7 +379,7 @@ class LMPSetup:
             for aa in self.sequence:
                 if spaghetti:
                     xyz[0] += definitions.bond_length
-                    xyzs.append(xyz)
+                    xyzs.append(xyz.copy())
                 else:
                     xyz = self.xyz[0, k - 1, :]
                 atoms.append(f'      {k :3d}          {chain}    '

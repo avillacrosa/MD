@@ -1,6 +1,7 @@
 import analysis
 import os
 import glob
+import definitions
 import re
 import pandas as pd
 import numpy as np
@@ -40,15 +41,15 @@ class Plotter(analysis.Analysis):
         self.obs_data = None
         self.plot_id = None
 
-        self.observables = ['rg', 'distance_map', 'contact_map', 'dij', 'flory', 'charge']
+        self.observables = ['rg', 'distance_map', 'contact_map', 'dij', 'flory', 'charge', 'rho']
         self.force_recalc = force_recalc
 
         self.rg_Tc_legend_helper = {}
         self.rg_Tc_artist_helper = None
 
     def make_index(self, force_update=True):
-        if os.path.exists('../data/index.txt') and not force_update:
-            df = pd.read_csv('../data/index.txt', sep=' ', index_col=0)
+        if os.path.exists(os.path.join(definitions.module_dir, 'index.txt')) and not force_update:
+            df = pd.read_csv(os.path.join(definitions.module_dir, 'index.txt'), sep=' ', index_col=0)
             return df
         lmp_dirs = self.get_lmp_dirs(self.oliba_prod_dir)
         df = pd.DataFrame({
@@ -103,7 +104,7 @@ class Plotter(analysis.Analysis):
         df["Scale"] = ss
         df["Name"] = paths
         df["FullPath"] = lmp_dirs
-        df.to_csv('../data/index.txt', sep=' ', mode='w')
+        df.to_csv(os.path.join(definitions.module_dir, 'index.txt'), sep=' ', mode='w')
         return df
 
     def plot(self, observable, index, plot_id, **kwargs):
@@ -124,12 +125,11 @@ class Plotter(analysis.Analysis):
         ls = df.iloc[index]["Scale"]
 
         self.protein = protein
-        if os.path.exists(os.path.join('../data/sequences', f'{self.protein}.seq')):
-            with open(os.path.join('../data/sequences', f'{self.protein}.seq')) as f:
+        if os.path.exists(os.path.join(os.path.join(definitions.hps_data_dir, 'sequences'), f'{self.protein}.seq')):
+            with open(os.path.join(os.path.join(definitions.hps_data_dir, 'sequences'), f'{self.protein}.seq')) as f:
                 self.sequence = f.readlines()[0]
         else:
-            with open(os.path.join('../data/sequences', f'CPEB4.seq')) as f:
-                self.sequence = f.readlines()[0]
+            raise SystemError(f"{self.protein}.seq not found")
 
         self.label = kwargs["label"] if "label" in kwargs else f'{protein}, I = {ionic_strength:.0f}, ε = {eps:.0f} HPS = {ls:.1f}'
         self.style = kwargs["style"] if "style" in kwargs else '-'
@@ -163,21 +163,25 @@ class Plotter(analysis.Analysis):
             data = self.plot_distance_map(contacts=contacts, temperature=temperature, b=o_wd2, double=double, log=log, inter=inter, frac=frac)[0]
             self.contact_maps[protein] = data
         if observable == 'dij':
-            data = self.plot_dijs(plot_flory_fit=True, plot_ideal_fit=False)
+            data = self.plot_dijs(plot_flory_fit=True, plot_ideal_fit=False)[1]
             self.dijs[protein] = data
         if observable == 'flory':
             data = self.plot_flory()
-            self.florys[protein] = data
+            if protein not in self.florys:
+                self.florys[protein] = data
         if observable == 'charge':
             data = self.plot_q_distr()
+        if observable == 'rho':
+            temperature = kwargs["temperature"] if "temperature" in kwargs else 0
+            data = self.plot_density_profile(T=temperature)
         self.axis.legend(fontsize=self.label_fsize)
         self.axis.xaxis.set_tick_params(labelsize=self.ticks_fsize)
         self.axis.yaxis.set_tick_params(labelsize=self.ticks_fsize)
         if self.obs_data is None:
             pathlib.Path(d).mkdir(parents=True, exist_ok=True)
             np.savetxt(os.path.join(d, 'data.txt'), data)
-        self.figure.savefig(os.path.join('../temp', f'plot_{plot_id}.png'))
-        return
+        self.figure.savefig(os.path.join(definitions.module_dir, f'temp/plot_{plot_id}.png'))
+        return data
 
     def plot_distance_map(self, b=None, contacts=False, temperature=None, double=False, log=False, inter=False, frac=False):
         if frac and log:
@@ -193,8 +197,8 @@ class Plotter(analysis.Analysis):
                 # vmax_f = np.max(max_map) if np.max(max_map) > -np.min(max_map) else -np.min(max_map)
                 # vmin_f = -vmax_f
                 # TODO : HARDCODIN'
-                vmax_f = +.05
-                vmin_f = -.05
+                vmax_f = +.001
+                vmin_f = -.001
                 # label_f = '$\mathregular{\log(f_{i}/f_{j})}$' if contacts else '$\mathregular{\log(d_{i}/d_{j})}$'
                 label_f = f'log(f({self.protein})/f({b_obj.protein}))' if contacts else '$\log(d_{i}/d_{j})$'
                 cmap_f = matplotlib.cm.get_cmap('PRGn')
@@ -207,13 +211,15 @@ class Plotter(analysis.Analysis):
                 cmap_f = matplotlib.cm.get_cmap('PRGn') if b else matplotlib.cm.get_cmap('plasma')
             elif contacts:
                 # vmax_f = 1
-                vmax_f = .02
+                vmax_f = .01
                 vmin_f = -vmax_f if b else 0
                 # label_f = '$\mathregular{f_{i}-f_{j}}$' if b else '$\mathregular{f_{i}}$'
                 label_f = f'f({self.protein})-f({b_obj.protein})' if b else '$f_{i}$'
                 cmap_f = matplotlib.cm.get_cmap('PRGn') if b else matplotlib.cm.get_cmap('plasma')
             else:
-                vmax_f = np.max(dist_map)
+                # vmax_f = np.max(dist_map)
+                # vmin_f = -vmax_f if b else 0
+                vmax_f = 15
                 vmin_f = -vmax_f if b else 0
                 label_f = f'd({self.protein})-d({b_obj.protein})' if b else '$\mathregular{d_{i}}$'
                 cmap_f = matplotlib.cm.get_cmap('PRGn') if b else matplotlib.cm.get_cmap('plasma')
@@ -222,10 +228,9 @@ class Plotter(analysis.Analysis):
         if self.obs_data is not None:
             cont_map = self.obs_data
         else:
-            cont_map = self.inter_distance_map(use='md', contacts=contacts, temperature=temperature) if inter else self.intra_distance_map(use='md', contacts=contacts, temperature=temperature)
-            cont_map = cont_map.mean(axis=1)
-            cont_map = cont_map[:,0:440,0:440]
-
+            # TODO : ONLY TAKING INTERCHAIN INTO ACCOUNT HERE
+            cont_map = self.inter_distance_map(use='md', contacts=contacts, temperature=temperature)[0] if inter else self.intra_distance_map(use='md', contacts=contacts, temperature=temperature)
+            cont_map = cont_map if inter else cont_map.mean(axis=1)
         if b:
             b_obj = analysis.Analysis(oliba_wd=b)
             b_cont_map = b_obj.inter_distance_map(use='md', contacts=contacts, temperature=temperature) if inter else b_obj.intra_distance_map(use='md', contacts=contacts, temperature=temperature)
@@ -247,8 +252,7 @@ class Plotter(analysis.Analysis):
             img = self.axis.imshow(distance_map, cmap=cmap, vmin=vmin, vmax=vmax)
             cmap.set_bad('red', alpha=0.15)
 
-        q_total, q_plus, q_minus = self.get_charge_seq(sequence=self.sequence)
-
+        q_total, q_plus, q_minus = self.get_charge_seq()
         for i, q in enumerate(q_total):
             if q < 0:
                 self.axis.axvline(i, alpha=0.2, color='red')
@@ -256,7 +260,7 @@ class Plotter(analysis.Analysis):
                 self.axis.axvline(i, alpha=0.2, color='blue')
         self.figure.subplots_adjust(left=0, right=1)
         self.axis.invert_yaxis()
-        if len(self.sequence) == 448:
+        if self.chain_atoms == 448:
             self.axis.axvspan(403, 410, color='black', alpha=0.3, label='E4')
         cb = self.figure.colorbar(img, orientation='horizontal', fraction=0.046, pad=0.08)
         cb.set_label(label, fontsize=20)
@@ -271,17 +275,18 @@ class Plotter(analysis.Analysis):
             # TODO : SECOND CALL IS HERE IMPLICIT
             florys = self.flory_scaling_fit(use='md', r0=r0, ijs=[ijs, means, err])[0]
 
-        self.axis.set_xlabel("|i-j|")
-        self.axis.set_ylabel(r'dij ($\AA$)')
+        self.axis.set_xlabel("|i-j|", fontsize=self.label_fsize)
+        self.axis.set_ylabel(r'dij ($\AA$)', fontsize=self.label_fsize)
         for i in range(len(self.get_temperatures())):
             mean = means[i, :]
+            p = self.axis.plot(ijs, mean, label=f"T={self.get_temperatures()[i]}", zorder=0)
             if plot_flory_fit:
                 flory = florys[i]
-                self.axis.plot(ijs, r0 * np.array(ijs) ** flory, '--', label=f"Fit to {r0:.1f}*N^{flory:.3f}", color=self.color)
+                # self.axis.plot(ijs, r0 * np.array(ijs) ** flory, '--', label=f"Fit to {r0:.1f}*N^{flory:.3f}", color=self.color)
+                self.axis.plot(ijs, r0 * np.array(ijs) ** flory, '--', color=p[0].get_color())
             if plot_ideal_fit:
-                self.axis.plot(ijs, np.array(ijs) ** 0.5 * r0, '--', label="Random Coil Scaling (5.5*N^0.5)", color=self.color)
-            self.axis.plot(ijs, mean, label="HPS results", color=self.color)
-            pline, capline, barline = self.axis.errorbar(ijs, mean, yerr=err[i,:], uplims=True, lolims=True)
+                self.axis.plot(ijs, np.array(ijs) ** 0.5 * r0, '--', label="Random Coil Scaling (5.5*N^0.5)", color=p[0].get_color(), zorder=2)
+            pline, capline, barline = self.axis.errorbar(ijs, mean, yerr=err[i, :], uplims=True, lolims=True, color=p[0].get_color(), zorder=1)
             capline[0].set_marker('_')
             capline[0].set_markersize(10)
             capline[1].set_marker('_')
@@ -296,7 +301,6 @@ class Plotter(analysis.Analysis):
         err_bars = self.block_error(observable=rg)
         self.axis.set_ylabel(r"Rg ($\AA$)", fontsize=self.label_fsize)
         self.axis.set_xlabel("T (K)", fontsize=self.label_fsize)
-        print(self.color)
         p = self.axis.plot(self.temperatures, rg.mean(axis=1), self.style, label=self.label, color=self.color)
         if self.protein in self.florys:
             flory = self.florys[self.protein][0, :]
@@ -307,16 +311,16 @@ class Plotter(analysis.Analysis):
             intersect = rg[idx_sup, :].mean() - slope*self.temperatures[idx_sup]
             rgC = slope*Tc + intersect
             phase_params = self.axis.scatter(Tc, rgC, s=80, color='firebrick', alpha=0.5)
-            if self.plot_id not in self.rg_Tc_legend_helper:
-                self.rg_Tc_legend_helper[self.plot_id] = [[], []]
-            self.rg_Tc_legend_helper[self.plot_id][1].append(f"PT {self.protein}. Tc = {Tc:.0f}, Rgc = {rgC:.0f}")
-            self.rg_Tc_legend_helper[self.plot_id][0].append(phase_params)
-            if self.rg_Tc_artist_helper is not None:
-                self.rg_Tc_artist_helper.remove()
-            leg = self.axis.legend(self.rg_Tc_legend_helper[self.plot_id][0], self.rg_Tc_legend_helper[self.plot_id][1], loc=4, fontsize=self.label_fsize)
-            self.rg_Tc_artist_helper = leg
-            self.axis.add_artist(self.rg_Tc_artist_helper)
-            # self.axis.set_ylim(ylim[0]-7, ylim[1]+7)
+            # if self.protein not in self.rg_Tc_legend_helper:
+            #     self.rg_Tc_legend_helper[self.protein] = [[], []]
+            # self.rg_Tc_legend_helper[self.protein][1].append(f"PT {self.protein}. Tc = {Tc:.0f}, Rgc = {rgC:.0f}")
+            # self.rg_Tc_legend_helper[self.protein][0].append(phase_params)
+            # if self.rg_Tc_artist_helper is not None:
+            #     self.rg_Tc_artist_helper.remove()
+            # # leg = self.axis.legend(self.rg_Tc_legend_helper[self.protein][0], self.rg_Tc_legend_helper[self.protein][1], loc=4, fontsize=self.label_fsize)
+            # # self.rg_Tc_artist_helper = leg
+            # self.axis.add_artist(self.rg_Tc_artist_helper)
+            # TODO : HARDCODE...
             self.axis.set_ylim(25, 95)
             ylim = self.axis.get_ylim()
             self.axis.axhspan(rgC, ylim[1], color="green", alpha=0.08)
@@ -353,6 +357,15 @@ class Plotter(analysis.Analysis):
         capline[1].set_markersize(10)
         self.axis.add_artist(leg)
         return np.array([florys, r0s, err])
+
+    def plot_density_profile(self, T, axis=0):
+        profs = self.density_profile(T=T)
+        profs = profs.mean(axis=1)[:, axis]
+        bins, data = np.histogram(profs, bins=25)
+        cent_bins = (data[:-1]+data[1:])/2
+        h = self.axis.hist(profs, bins=50, label=self.label, alpha=0.4)
+        self.axis.plot(cent_bins, bins, '.', label=self.label, color=h[0].get_color())
+        return profs
 
     def plot_q_distr(self, window=9):
         total, plus, minus = self.get_charge_seq(sequence=self.sequence, window=window)

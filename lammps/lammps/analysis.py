@@ -7,6 +7,7 @@ import scipy.constants as cnt
 import numpy as np
 import os
 import scipy
+import time
 import definitions
 import lmpsetup
 import multiprocessing as mp
@@ -26,7 +27,7 @@ class Analysis(lmp.LMP):
         if self.o_wd is not None:
             self.structures = self.get_structures()
 
-    def intra_distance_map(self, contacts=False, temperature=None):
+    def intra_distance_map(self, use='md', contacts=False, temperature=None):
         structures = self.structures.copy()
         contact_maps = []
         if temperature is not None:
@@ -42,41 +43,49 @@ class Analysis(lmp.LMP):
             contact_maps.append(contact_map)
         return np.array(contact_maps)
 
-    def inter_distance_map(self, contacts=False, temperature=None):
+    def inter_distance_map(self, use='md', contacts=False, temperature=None):
         if self.chains == 1:
             raise SystemError("Demanded interchain distances but only a single chain is present!")
         structures = self.structures.copy()
-        contact_maps = []
+        inter_cmap, intra_cmap = [], []
         if temperature is not None:
             structures = [structures[temperature]]
-        # for traj in structures:
-        self.chains = 2
-        for traj in structures[0:2]:
-            flat_pairs = list(itertools.product(range(self.chain_atoms), range(self.chain_atoms)))
-            dmaps_by_chain = np.zeros(shape=(self.chains, self.chain_atoms, self.chain_atoms), dtype='float32')
-            # for frame in range(traj.n_frames):
-            for frame in range(2):
-                for c1 in range(self.chains):
-                    dcm = np.zeros(shape=(self.chains, self.chains-1, self.chain_atoms, self.chain_atoms))
-                    for c2 in range(self.chains):
+        chain_runner, frame_runner = 50, 10
+        flat_pairs = list(itertools.product(range(self.chain_atoms), range(self.chain_atoms)))
+        for traj in structures:
+            inter_chain = np.zeros(shape=(self.chains, self.chain_atoms, self.chain_atoms), dtype='float64')
+            intra_chain = np.zeros(shape=(self.chains, self.chain_atoms, self.chain_atoms), dtype='float64')
+            for frame in range(frame_runner):
+                # if frame != 0:
+                #     print("TIME SPENT THIS FRAME", time.time()-ti)
+                # ti = time.time()
+                print(frame)
+                for c1 in range(chain_runner):
+                    # TODO : MAYBE ONLY UPPER OR LOWER TRIANGLE ?
+                    inter, intra = [], []
+                    for c2 in range(chain_runner):
+                        pairs = list(itertools.product(range(c1 * self.chain_atoms, (c1 + 1) * self.chain_atoms),
+                                                       range(c2 * self.chain_atoms, (c2 + 1) * self.chain_atoms)))
+                        d = md.compute_distances(traj[-frame], pairs)
+                        d = md.geometry.squareform(d, flat_pairs)*10
+                        d = d[0]
+                        if contacts:
+                            d = mda.contacts.contact_matrix(d, radius=6)
                         if c1 != c2:
-                            pairs = list(itertools.product(range(c1 * self.chain_atoms, (c1 + 1) * self.chain_atoms),
-                                                           range(c2 * self.chain_atoms, (c2 + 1) * self.chain_atoms)))
-                            d = md.compute_distances(traj[frame], pairs, opt=False)
-                            d = md.geometry.squareform(d, flat_pairs)*10
-                            print(d)
-                            if contacts:
-                                d = mda.contacts.contact_matrix(d, radius=6)
-                            if c2 > c1:
-                                dcm[c1, c2 - 1, :, :] = d
-                            else:
-                                dcm[c1, c2, :, :] = d
-                    dmaps_by_chain = dcm.min(axis=1)
-            dmaps_by_chain /= traj.n_frames
-            dmaps = np.array(dmaps_by_chain)
-            contact_map = dmaps.mean(axis=0)
-            contact_maps.append(contact_map)
-        return np.array(contact_maps)
+                            inter.append(d)
+                        elif c1 == c2:
+                            intra.append(d)
+                    inter = np.array(inter)
+                    intra = np.array(intra)
+                    # inter_chain[c1, :, :] += inter.mean(axis=0)
+                    inter_chain[c1, :, :] += inter.sum(axis=0)
+                    intra_chain[c1, :, :] += intra[0, :, :]
+            inter_chain /= frame_runner
+            # inter_chain = inter_chain.mean(axis=0)
+            inter_chain = inter_chain.sum(axis=0)
+            inter_cmap.append(inter_chain)
+            intra_cmap.append(intra_cmap)
+        return np.array(inter_cmap), np.array(intra_cmap)
 
     def ij_from_contacts(self, use='md', contacts=None):
         if contacts is None:
@@ -164,11 +173,14 @@ class Analysis(lmp.LMP):
                 rgs.append(rg)
         return np.array(rgs)
 
-    def minimize_I_ls(self, a_dir, b_dir, temp_dir='/home/adria/scripts/lammps/temp'):
+    def minimize_I_ls(self, a_dir, b_dir, temp_dir='/home/adria/scripts/lammps/temp', I0=100e-3, l0=1.0, T=0):
         # TODO HANDLE IF B > A
         above_tc = Analysis(oliba_wd=a_dir)
         below_tc = Analysis(oliba_wd=b_dir)
 
+        global rw_A
+        global rw_B
+        rw_A, rw_B = 0, 0
 
         def trim_warnings(f):
             with open(f, 'r+') as file:
@@ -180,7 +192,9 @@ class Analysis(lmp.LMP):
                 file.truncate()
 
         def rg_rerun(T, ls, I, protein_object, data_dir):
-            Ei = protein_object.data[T, :, 1][::200]
+            last = 5000
+            ev = 10
+            Ei = protein_object.data[T, :, 1][-last::ev]
             rgi = protein_object.rg(use='md')[T, :]
             protein = protein_object.protein
             shutil.copyfile(os.path.join(data_dir, 'data.data'), os.path.join(temp_dir, f'data.data'))
@@ -192,15 +206,15 @@ class Analysis(lmp.LMP):
             rerun.t = int(np.max(protein_object.get_lmp_data()[T, :, 0]))
             rerun.rerun_dump = f'atom_traj_{protein}.lammpstrj'
             rerun.get_hps_pairs()
-            rerun.rerun_skip = 200
+            rerun.rerun_skip = int(ev)
+            rerun.rerun_start = int(rerun.t+rerun.save - last*rerun.save)
+            rerun.rerun_stop = rerun.t
             rerun.temperature = protein_object.get_temperatures()[T]
             rerun.write_hps_files(rerun=True, data=False, qsub=False, slurm=False, readme=False, rst=False)
-            rerun.run(file=os.path.join(rerun.out_dir, 'lmp.lmp'), n_cores=4)
+            rerun.run(file=os.path.join(rerun.out_dir, 'lmp.lmp'), n_cores=2)
 
             rerun_analysis = Analysis(oliba_wd=temp_dir)
             Ef = rerun_analysis.data[0, :, 1]
-
-            # INCORRECT EF.SHAPE ?
 
             weights = rerun_analysis.weights(Ei=Ei, Ef=Ef, T=protein_object.get_temperatures()[T])
             weights = weights/np.sum(weights)
@@ -212,21 +226,218 @@ class Analysis(lmp.LMP):
             I, ls = x[0], x[1]
             rw_above_rg = rg_rerun(T=T, ls=ls, I=I, protein_object=above_tc, data_dir=a_dir)
             rw_below_rg = rg_rerun(T=T, ls=ls, I=I, protein_object=below_tc, data_dir=b_dir)
-            print(f"FOR {ls} {I} above rg = {rw_above_rg} and below rg = {rw_below_rg}")
-            c = rw_above_rg - rw_below_rg + (rw_below_rg - mean_rg + rw_above_rg - mean_rg)**2
+            global rw_A
+            global rw_B
+            rw_A = rw_above_rg
+            rw_B = rw_below_rg
+            c = - (rw_above_rg - rw_below_rg)**2 + (5*((rw_below_rg + rw_above_rg)/2 - mean_rg))**2
+            print(rw_A, rw_B)
             return c
 
         # TEST
-        T = 6
-        print(above_tc.rg(use='md').mean(axis=1)[T])
-        print(below_tc.rg(use='md').mean(axis=1)[T])
+        rgiA = above_tc.rg(use='md').mean(axis=1)
+        rgiB = below_tc.rg(use='md').mean(axis=1)
+        print(rgiA[T], rgiB[T])
         mean_rg = (above_tc.rg(use='md').mean(axis=1)+below_tc.rg(use='md').mean(axis=1))/2
         mean_rg = mean_rg[T]
+        x0 = np.array([I0, l0])
+        m = scipy.optimize.minimize(fun=cost, x0=x0, args=[T])
+        print("="*80)
+        print(f"For T={T} and initial parameters I = {I0}, ls = {l0} with RgA = {above_tc.rg(use='md').mean(axis=1)[T]:.2f}, RgB = {below_tc.rg(use='md').mean(axis=1)[T]:.2f}")
+        print(f"Minimization resulted in {m.x[0]:.2f}  {m.x[1]:.2f} and reweighted Rg's A = {rw_A:.2f} and B = {rw_B:.2f}")
+        print("="*80)
+        result = "=============================================\n"
+        result += f'T={T}, I0={I0}, l0={l0}, rgiAbove={rgiA}, rgiBelow={rgiB} \n'
+        result += f'If={m.x[0]:.2f}, lf={m.x[1]:.2f}, rgAboveF={rw_A:.2f}, rgBelowF={rw_B:.2f}\n'
+        result += "=============================================\n"
+        with open(f'minimization_{T}.txt', 'a+') as min:
+            min.write(result)
+        return m
 
-        x0 = np.array([100e-3, 1.0])
+    def minimize_I_eps(self, a_dir, b_dir, temp_dir='/home/adria/scripts/lammps/temp', I0=100e-3, eps0=80.0, T=0):
+        # TODO HANDLE IF B > A
+        above_tc = Analysis(oliba_wd=a_dir)
+        below_tc = Analysis(oliba_wd=b_dir)
+
+        global rw_A
+        global rw_B
+        rw_A, rw_B = 0, 0
+
+        def trim_warnings(f):
+            with open(f, 'r+') as file:
+                lines = file.readlines()
+                file.seek(0)
+                for line in lines:
+                    if "WARNING" not in line:
+                        file.write(line)
+                file.truncate()
+
+        def rg_rerun(T, eps, I, protein_object, data_dir):
+            last = 5000
+            ev = 10
+            Ei = protein_object.data[T, :, 1][-last::ev]
+            rgi = protein_object.rg(use='md')[T, :]
+            protein = protein_object.protein
+            shutil.copyfile(os.path.join(data_dir, 'data.data'), os.path.join(temp_dir, f'data.data'))
+            shutil.copyfile(os.path.join(data_dir, f'reorder-{T}.lammpstrj'), os.path.join(temp_dir, f'atom_traj_{protein}.lammpstrj'))
+            rerun = lmpsetup.LMPSetup(oliba_wd=temp_dir, protein=protein, temper=False)
+            rerun.ionic_strength = I
+            rerun.water_perm = eps
+            rerun.save = int(protein_object.get_lmp_data()[T, 1, 0] - protein_object.get_lmp_data()[T, 0, 0])
+            rerun.t = int(np.max(protein_object.get_lmp_data()[T, :, 0]))
+            rerun.rerun_dump = f'atom_traj_{protein}.lammpstrj'
+            rerun.get_hps_pairs()
+            rerun.rerun_skip = int(ev)
+            rerun.rerun_start = int(rerun.t+rerun.save - last*rerun.save)
+            rerun.rerun_stop = rerun.t
+            rerun.temperature = protein_object.get_temperatures()[T]
+            rerun.write_hps_files(rerun=True, data=False, qsub=False, slurm=False, readme=False, rst=False)
+            rerun.run(file=os.path.join(rerun.out_dir, 'lmp.lmp'), n_cores=2)
+
+            rerun_analysis = Analysis(oliba_wd=temp_dir)
+            Ef = rerun_analysis.data[0, :, 1]
+
+            weights = rerun_analysis.weights(Ei=Ei, Ef=Ef, T=protein_object.get_temperatures()[T])
+            weights = weights/np.sum(weights)
+            reweight_rg = np.dot(rgi, weights.T)
+            return reweight_rg
+
+        def cost(x, T):
+            T = T[0]
+            I, eps = x[0], x[1]
+            print(I,eps)
+            rw_above_rg = rg_rerun(T=T, eps=eps, I=I, protein_object=above_tc, data_dir=a_dir)
+            rw_below_rg = rg_rerun(T=T, eps=eps, I=I, protein_object=below_tc, data_dir=b_dir)
+            global rw_A
+            global rw_B
+            rw_A = rw_above_rg
+            rw_B = rw_below_rg
+            c = - (rw_above_rg - rw_below_rg)**2 + (5*((rw_below_rg + rw_above_rg)/2 - mean_rg))**2
+            return c
+
+        # TEST
+        rgiA = above_tc.rg(use='md').mean(axis=1)
+        rgiB = below_tc.rg(use='md').mean(axis=1)
+        print(rgiA[T], rgiB[T])
+        mean_rg = (above_tc.rg(use='md').mean(axis=1)+below_tc.rg(use='md').mean(axis=1))/2
+        mean_rg = mean_rg[T]
+        x0 = np.array([I0, eps0])
         m = scipy.optimize.minimize(fun=cost, x0=x0, args=[T])
         print(m.x)
+        print("="*80)
+        print(f"For T={T} and initial parameters I = {I0}, eps = {eps0} with RgA = {above_tc.rg(use='md').mean(axis=1)[T]:.2f}, RgB = {below_tc.rg(use='md').mean(axis=1)[T]:.2f}")
+        print(f"Minimization resulted in {m.x[0]}  {m.x[1]} and reweighted Rg's A = {rw_A:.2f} and B = {rw_B:.2f}")
+        print("="*80)
+        result = "=============================================\n"
+        result += f'T={T}, I0={I0}, eps={eps0}, rgiAbove={rgiA[T]}, rgiBelow={rgiB[T]} \n'
+        result += f'If={m.x[0]}, eps={m.x[1]}, rgAboveF={rw_A}, rgBelowF={rw_B}\n'
+        result += "=============================================\n"
+        with open(os.path.join(definitions.module_dir,f'temp/minimization_{T}_{above_tc.protein}_{below_tc.protein}.txt'), 'a+') as min:
+            min.write(result)
         return m
+
+    def minimize(self, a_dir, b_dir, T, temp_dir=os.path.join(definitions.module_dir, 'temp'), I0=None, l0=None, eps0=None):
+        default = {"I": 100e-3, "ls": 1.0, "eps": 80.0}
+        above_tc, below_tc = Analysis(oliba_wd=a_dir), Analysis(oliba_wd=b_dir)
+        rgiA, rgiB = above_tc.rg(use='md').mean(axis=1)[T], below_tc.rg(use='md').mean(axis=1)[T]
+        mean_rg = (rgiA + rgiB)/2
+        x0, x0_dict, args, args_dict = [], {}, [], {}
+        if I0 is not None:
+            x0.append(I0)
+            x0_dict["I"] = len(x0)-1
+        if l0 is not None:
+            x0.append(l0)
+            x0_dict["ls"] = len(x0)-1
+        if eps0 is not None:
+            x0.append(eps0)
+            x0_dict["eps"] = len(x0)-1
+
+        def rg_rerun(T, eps, I, ls, protein_object, data_dir):
+            last = 5000
+            ev = 10
+            Ei = protein_object.data[T, :, 1][-last::ev]
+            rgi = protein_object.rg(use='md')[T, :]
+            protein = protein_object.protein
+            shutil.copyfile(os.path.join(data_dir, 'data.data'), os.path.join(temp_dir, f'data.data'))
+            shutil.copyfile(os.path.join(data_dir, f'reorder-{T}.lammpstrj'), os.path.join(temp_dir, f'atom_traj_{protein}.lammpstrj'))
+            rerun = lmpsetup.LMPSetup(oliba_wd=temp_dir, protein=protein, temper=False)
+            rerun.ionic_strength = I
+            rerun.water_perm = eps
+            rerun.hps_scale = ls
+            rerun.save = int(protein_object.get_lmp_data()[T, 1, 0] - protein_object.get_lmp_data()[T, 0, 0])
+            rerun.t = int(np.max(protein_object.get_lmp_data()[T, :, 0]))
+            rerun.rerun_dump = f'atom_traj_{protein}.lammpstrj'
+            rerun.get_hps_pairs()
+            rerun.rerun_skip = int(ev)
+            rerun.rerun_start = int(rerun.t+rerun.save - last*rerun.save)
+            rerun.rerun_stop = rerun.t
+            rerun.temperature = protein_object.get_temperatures()[T]
+            rerun.write_hps_files(rerun=True, data=False, qsub=False, slurm=False, readme=False, rst=False)
+            rerun.run(file=os.path.join(rerun.out_dir, 'lmp.lmp'), n_cores=4)
+
+            rerun_analysis = Analysis(oliba_wd=temp_dir)
+            Ef = rerun_analysis.data[0, :, 1]
+
+            weights = rerun_analysis.weights(Ei=Ei, Ef=Ef, T=protein_object.get_temperatures()[T])
+            weights = weights/np.sum(weights)
+            print(f"n_eff = {self.n_eff(weights)}")
+            reweight_rg = np.dot(rgi, weights.T)
+            return reweight_rg
+
+        def cost(x, args):
+            T = args[0]
+            if "I" in x0_dict:
+                I = x[x0_dict["I"]]
+            else:
+                I = default["I"]
+            if "ls" in x0_dict:
+                ls = x[x0_dict["ls"]]
+            else:
+                ls = default["ls"]
+            if "eps" in x0_dict:
+                eps = x[x0_dict["eps"]]
+            else:
+                eps = default["eps"]
+            print("="*80)
+            print(f"I={I}, ls={ls}, eps={eps}")
+            rw_above_rg = rg_rerun(T=T, eps=eps, I=I, ls=ls, protein_object=above_tc, data_dir=a_dir)
+            rw_below_rg = rg_rerun(T=T, eps=eps, I=I, ls=ls, protein_object=below_tc, data_dir=b_dir)
+            global rw_A
+            global rw_B
+            rw_A, rw_B = rw_above_rg, rw_below_rg
+            c = - (rw_above_rg - rw_below_rg)**2 + 0.2*((rw_below_rg + rw_above_rg)/2 - mean_rg)**2
+            print(f"Rw RgA, {rw_A:.3f}, Rw RgB {rw_B:.3f}, diff {rw_A - rw_B:.2f}, dist to mean {(rw_below_rg + rw_above_rg)/2 - mean_rg:.2f}, cost {c:.2f}")
+            print("="*80)
+            return c
+
+        m = scipy.optimize.minimize(fun=cost, x0=np.array(x0), args=[T, default["I"], default["ls"], default["eps"]])
+
+        print("=" * 80)
+        print(
+            f"For T={T} and initial parameters I = {I0}, eps = {eps0} with RgA = {above_tc.rg(use='md').mean(axis=1)[T]:.2f}, RgB = {below_tc.rg(use='md').mean(axis=1)[T]:.2f}")
+        print(f"Minimization resulted in {m.x[0]}  {m.x[1]} and reweighted Rg's A = {rw_A:.2f} and B = {rw_B:.2f}")
+        print("=" * 80)
+        result = "=============================================\n"
+        result += f'T={T}, I0={I0}, eps={eps0}, rgiAbove={rgiA}, rgiBelow={rgiB} \n'
+        result += f'If={m.x[0]}, eps={m.x[1]}, rgAboveF={rw_A}, rgBelowF={rw_B}\n'
+        result += "=============================================\n"
+        with open(f'minimization_{T}.txt', 'a+') as min:
+            min.write(result)
+
+        return m
+
+    def n_eff(self, weights, kish=False):
+        if kish:
+            n_eff = 1. / np.sum(weights ** 2) / weights.size
+        else:
+            n_eff = np.exp(-np.sum(weights * np.log(weights * weights.size)))
+        # if kish:
+        #     for weight in weights:
+        #         n_eff.append(1. / np.sum(weights ** 2) / weights.size)
+        # else:
+        #     for weight in weights:
+        #         n_eff.append(np.exp(-np.sum(weight * np.log(weight * weight.size))))
+        return n_eff
 
     def weights(self, Ei, Ef, T):
         """ ENERGIES IN LMP IS IN KCAL/MOL (1 KCAL = 4184J) """
@@ -234,7 +445,7 @@ class Analysis(lmp.LMP):
         w = np.exp(-(Ef-Ei)/(kb*T))
         return w
 
-    def block_error(self, observable, block_length=5):
+    def block_error(self, observable, block_length=10):
         """
         Observable needs to be in shape (T, frames) (assuming Temper)
         """
@@ -283,73 +494,62 @@ class Analysis(lmp.LMP):
                 coms[T, c, :] = com
         return coms
 
-    # Cutoff in nanometers
-    def clusters(self, T, cutoff=5):
+    def clusters(self, T, cutoff=50):
+        def run(chain, filling):
+            if chain not in taken:
+                # clusters[chain] = [chain]
+                clusters.append([chain])
+                filling = chain
+            for i, d in enumerate(d_matrix[chain]):
+                if cutoff > d > 0 and i not in taken:
+                    taken.append(i)
+                    if i != filling:
+                        clusters[-1].append(i)
+                    run(i, filling)
+
         nchains = self.chains
         f_xyz = self.chain_coms()
         f_xyz = f_xyz[T, :, :]
         f_clust = []
-        for f in range(15, 20):
+
+        for f in range(self.structures[T].n_frames):
             xyz = f_xyz[:, f, :]
             d_matrix = np.zeros(shape=(nchains, nchains))
             for i, d1 in enumerate(xyz):
                 for j, d2 in enumerate(xyz):
                     d_matrix[i][j] = np.linalg.norm(d1 - d2)
 
-            taken = []
-            clusters = []
-            global filling
-            filling = 0
-
-            def run(chain):
-                if chain not in taken:
-                    clusters.append([chain])
-                    global filling
-                    filling = chain
-                for i, d in enumerate(d_matrix[chain]):
-                    if cutoff > d > 0 and i not in taken:
-                        taken.append(i)
-                        if i != filling:
-                            # TODO : IndexError: list index out of range
-                            clusters[filling].append(i)
-                        run(i)
+            taken, clusters = [], []
 
             for chain in range(d_matrix.shape[0]):
-                run(chain)
+                run(chain, 0)
             f_clust.append(clusters)
-        return f_clust
+        return f_clust, f_xyz
 
-    def density_from_clusters(self, T):
-        # TODO : REDUNDANT, COMS ALREADY IN CLUSTERS...
-        coms = self.chain_coms()[T]
-        frame_clusters = self.clusters(T=T)
-        droplet_rho, solution_rho = [], []
-        for f, clusters in enumerate(frame_clusters):
-            d_rho, s_rho = 0, 0
-            l_old, biggest_cluster = 0, None
-            for cluster in clusters:
-                l_new = len(cluster)
-                if l_new > l_old:
-                    biggest_cluster = cluster
-                l_old = l_new
+    def density_profile(self, T=None):
+        if T is None:
+            T = range(len(self.get_temperatures()))
+        else:
+            T = [T]
+        coms_temp = []
+        for temp in T:
+            frame_clusters, coms = self.clusters(T=temp)
+            for f, clusters in enumerate(frame_clusters):
+                l_old, biggest_cluster = 0, None
+                for cluster in clusters:
+                    l_new = len(cluster)
+                    if l_new > l_old:
+                        biggest_cluster = cluster
+                        l_old = l_new
 
-            r = 0
+                r = 0
+                for chain in biggest_cluster:
+                    r += coms[chain, f, :]
+                r /= len(biggest_cluster)
 
-            for chain in biggest_cluster:
-                r += coms[chain, f]
-
-            r /= len(biggest_cluster)
-
-            for cluster in clusters:
-                for chain in cluster:
-                    if np.linalg.norm(coms[chain, f] - r) < 20:
-                        d_rho += 1
-                    elif np.linalg.norm(coms[chain, f] - r) > 50:
-                        s_rho += 1
-            droplet_rho.append(d_rho)
-            solution_rho.append(s_rho)
-
-        return droplet_rho, solution_rho
+                coms[:, f, :] -= r
+            coms_temp.append(coms)
+        return np.array(coms_temp)
 
 
 mpi_results = []

@@ -1,0 +1,16 @@
+ Protein I Eps Scale Name FullPath
+0 12D_CPEB4_D4 100 80.0 1.0 1.0ls-100I-80e /home/adria/data/prod/lammps/12D_CPEB4_D4/1.0ls-100I-80e
+1 7D_CPEB4 100 80.0 1.0 1.0ls-100I-80e /home/adria/data/prod/lammps/7D_CPEB4/x1/1.0ls-100I-80e
+2 BUGS 100 80.0 1.0 bug1 /home/adria/data/prod/lammps/BUGS/bug1
+3 BUGS 100 80.0 1.0 bug2 /home/adria/data/prod/lammps/BUGS/bug2
+4 CPEB4 100 80.0 1.0 1.0ls-100I-80e /home/adria/data/prod/lammps/CPEB4/x1/1.0ls-100I-80e
+5 CPEB4_D4 100 80.0 1.0 1.0ls-100I-80e /home/adria/data/prod/lammps/CPEB4_D4/1.0ls-100I-80e
+6 CPEB4x50-24 100 80.0 1.0 CPEB4x50-24 /home/adria/data/prod/lammps/CPEB4x50-24
+7 CPEB4x50 100 10.0 1.0 1.0ls-100I-10e /home/adria/data/prod/lammps/CPEB4x50/1.0ls-100I-10e
+8 CPEB4x50 100 80.0 1.0 1.0ls-100I-80e /home/adria/data/prod/lammps/CPEB4x50/1.0ls-100I-80e
+9 TDP 100 80.0 1.0 TDP /home/adria/data/prod/lammps/TDP
+10 TEST 100 80.0 1.0 TEST /home/adria/data/prod/lammps/TEST
+11 TEST 100 80.0 1.0 7D_CPEB4 /home/adria/data/prod/lammps/TEST/7D_CPEB4
+12 TEST 100 80.0 1.0 CPEB4 /home/adria/data/prod/lammps/TEST/CPEB4
+13 TEST 100 80.0 1.0 S_7D_CPEB4 /home/adria/data/prod/lammps/TEST/S_7D_CPEB4
+14 TEST 100 80.0 1.0 S_7D_CPEB4 /home/adria/data/prod/lammps/TEST/S_7D_CPEB4

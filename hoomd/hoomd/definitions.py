@@ -1,8 +1,3 @@
-hps_data_dir = '/home/adria/scripts/data'
-module_dir = '/home/adria/scripts/lammps'
-lmp2pdb = '/home/adria/perdiux/src/lammps-7Aug19/tools/ch2lmp/lammps2pdb.pl'
-lmp = '/home/adria/local/lammps/bin/lmp'
-
 bond_length = 3.8
 
 # ARG, CYS, TRP masses from http://www.bioinfor.com/amino-acid/

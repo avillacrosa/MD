@@ -1,0 +1,36 @@
+# Multiprotein complexes
+
+units       real
+dimension   3
+boundary    p p p
+atom_style  full
+
+bond_style  harmonic
+pair_style  none
+dielectric  80.0
+
+read_data   hps.data
+
+bond_coeff          1     9.600     3.8
+
+#special_bonds fene
+#neighbor  3.5 multi
+#neigh_modify  every 10 delay 0
+
+comm_style    tiled
+timestep      10.0
+
+velocity      all create 300 $v_seed
+fix           fxnve  all nve
+fix           fxlange all langevin 300 300 10000 $langevin_seed
+
+compute rg all gyration
+
+thermo        5000
+thermo_style  custom step pe ke temp c_rg
+thermo_modify flush yes
+
+dump          VMD1 all xtc 5000 hps_traj.xtc
+dump_modify   VMD1 unwrap yes
+dump          new_dump all atom 5000 hps_traj.atom
+run           100000000
