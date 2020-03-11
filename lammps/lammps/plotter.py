@@ -129,7 +129,8 @@ class Plotter(analysis.Analysis):
             with open(os.path.join(os.path.join(definitions.hps_data_dir, 'sequences'), f'{self.protein}.seq')) as f:
                 self.sequence = f.readlines()[0]
         else:
-            raise SystemError(f"{self.protein}.seq not found")
+            with open(os.path.join(os.path.join(definitions.hps_data_dir, 'sequences'), f'CPEB4.seq')) as f:
+                self.sequence = f.readlines()[0]
 
         self.label = kwargs["label"] if "label" in kwargs else f'{protein}, I = {ionic_strength:.0f}, ε = {eps:.0f} HPS = {ls:.1f}'
         self.style = kwargs["style"] if "style" in kwargs else '-'

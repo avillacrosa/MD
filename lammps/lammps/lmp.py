@@ -450,7 +450,6 @@ class LMP:
             tr = md.load(xtc, top=self._get_initial_frame())
             nmin.append(tr.n_frames)
             trajs.append(tr)
-        print(self.data.shape)
         # TODO : IN CASE SIMULATION HAS NOT FINISHED, FORCE SAME NUMBER OF FRAMES BETWEEN REPLICAS
         for k, tr in enumerate(trajs):
             trajs[k] = tr[:np.array(nmin).min()]

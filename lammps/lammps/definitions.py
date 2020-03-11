@@ -1,3 +1,5 @@
+import os
+
 hps_data_dir = '/home/adria/scripts/data'
 module_dir = '/home/adria/scripts/lammps'
 lmp2pdb = '/home/adria/perdiux/src/lammps-7Aug19/tools/ch2lmp/lammps2pdb.pl'
@@ -30,13 +32,13 @@ residues = {
 }
 
 sigmas = {}
-with open('../data/hps/sigmas.dat') as filein:
+with open(os.path.join(hps_data_dir, 'hps/sigmas.dat')) as filein:
     for line in filein:
         line = line.split()
         sigmas[line[0]] = float(line[1])
 
 lambdas = {}
-with open('../data/hps/lambdas.dat') as filein:
+with open(os.path.join(hps_data_dir, 'hps/lambdas.dat')) as filein:
     for line in filein:
         line = line.split()
         lambdas[line[0]] = float(line[1])

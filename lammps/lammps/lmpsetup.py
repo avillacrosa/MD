@@ -215,7 +215,7 @@ class LMPSetup:
         lmp_template = Template(lmp_temp_file.read())
         lmp_subst = lmp_template.safe_substitute(self.lmp_file_dict)
 
-        topo_temp_file = open(os.path.join(definitions.module_dir, 'templates/replica/topo_template.data'))
+        topo_temp_file = open(os.path.join(definitions.module_dir, 'templates/topo_template.data'))
         topo_template = Template(topo_temp_file.read())
         topo_subst = topo_template.safe_substitute(self.topo_file_dict)
 
