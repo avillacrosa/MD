@@ -1,5 +1,9 @@
 # Multiprotein complexes
 
+dump          xtc_file all xtc $save xtc_traj.xtc
+dump_modify   xtc_file unwrap yes
+
+
 units       real
 dimension   3
 boundary    p p p

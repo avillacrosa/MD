@@ -1,9 +1,13 @@
+#!/bin/bash
+
 #$ -pe smp $np
 #$ -q all.q
 #$ -l mem_free=10G
 #$ -N $jobname
 #$ -M adria.villacrosa@irbbarcelona.org
-#!/bin/bash
+#$ -o $work_dir/out.hps
+#$ -e $work_dir/err.hps
+
 echo $HOSTNAME
 cd $work_dir
 $command

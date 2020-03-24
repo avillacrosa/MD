@@ -30,9 +30,6 @@ thermo        $save
 thermo_style  custom step pe ke temp c_rg
 thermo_modify flush yes
 
-dump          xtc_file all xtc $save xtc_traj.xtc
-dump_modify   xtc_file unwrap yes
-
 dump          atom_file all atom $save atom_traj.lammpstrj
 dump_modify   atom_file flush yes
 
