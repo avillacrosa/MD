@@ -14,17 +14,18 @@ import matplotlib.pyplot as plt
 
 
 class Plotter(analysis.Analysis):
-    def __init__(self, force_recalc=False):
+    def __init__(self, force_recalc=False, max_frames=1000):
         """
         Just a helper for plotting. Many things (paths and what not) are really arbitrary.
         :param force_recalc: bool, Useless atm
         """
-        super().__init__(oliba_wd=None)
+        super().__init__(oliba_wd=None, max_frames=max_frames)
         self.oliba_prod_dir = '/home/adria/data/prod/lammps'
         self.oliba_data_dir = '/home/adria/data/data'
         self.index = self.make_index()
 
         self.figure, self.axis = None, None
+        self.figure2, self.axis2 = None, None
         self.plots = {}
         self.protein = None
         self.obs_data = None
@@ -71,7 +72,6 @@ class Plotter(analysis.Analysis):
             'FullPath': 'none'
         })
         prots, Is, epss, ss, paths = [], [], [], [], []
-        print(lmp_dirs)
         for i, d in enumerate(lmp_dirs):
             # print(os.path.normpath(d).split(os.sep))
             # TODO Yeah...
@@ -110,7 +110,6 @@ class Plotter(analysis.Analysis):
                         ss.append(round(scale, 2))
                     if eps and I and scale:
                         break
-        print(len(prots), len(Is), len(epss), len(ss), len(paths), len(lmp_dirs))
         df["Protein"] = prots
         df["I"] = Is
         df["Eps"] = epss
@@ -177,8 +176,12 @@ class Plotter(analysis.Analysis):
             data = self.plot_rg(**kwargs)
             self.gyrations[protein] = data
         if observable == 'distance_map' or observable == 'contact_map':
+            self.figure2, self.axis2 = plt.subplots(figsize=(16, 12), sharex='all')
             data = self.plot_distance_map(**kwargs)[0]
             self.contact_maps[protein] = data
+            self.axis2.legend(fontsize=self.label_fsize)
+            self.axis2.xaxis.set_tick_params(labelsize=self.ticks_fsize)
+            self.axis2.yaxis.set_tick_params(labelsize=self.ticks_fsize)
         if observable == 'dij':
             data = self.plot_dijs(plot_flory_fit=True, plot_ideal_fit=False)[1]
             self.dijs[protein] = data
@@ -211,7 +214,6 @@ class Plotter(analysis.Analysis):
         double = kwargs["double"] if "double" in kwargs else False
         log = kwargs["log"] if "log" in kwargs else False
         frac = kwargs["frac"] if "frac" in kwargs else False
-        inter = kwargs["inter"] if "inter" in kwargs else False
         vmin = kwargs["vmin"] if "vmin" in kwargs else None
         vmax = kwargs["vmax"] if "vmax" in kwargs else None
         cmap_label = kwargs["cmap_label"] if "cmap_label" in kwargs else None
@@ -227,13 +229,17 @@ class Plotter(analysis.Analysis):
             raise SystemExit("log/frac plots only available for 2 proteins")
 
         # TODO : ONLY TAKING INTERCHAIN INTO ACCOUNT HERE
-        cont_map = self.inter_distance_map(contacts=contacts, temperature=temperature)[
-            0] if inter else self.intra_distance_map(contacts=contacts, temperature=temperature)
-        cont_map = cont_map if inter else cont_map.mean(axis=1)
+        # cont_map = self.inter_distance_map(contacts=contacts, temperature=temperature)[
+        if self.chains != 1:
+            # cont_map = self.async_inter_distance_map(contacts=contacts, temperature=temperature)[1]
+            cont_map, extra_cont_map = self.inter_distance_map(contacts=contacts, temperature=temperature)
+        else:
+            cont_map = self.intra_distance_map(contacts=contacts, temperature=temperature)
+            cont_map = cont_map.mean(axis=1)
 
         if b:
             b_obj = analysis.Analysis(oliba_wd=b)
-            b_cont_map = b_obj.inter_distance_map(contacts=contacts,
+            b_cont_map = b_obj.async_inter_distance_map(contacts=contacts,
                                                   temperature=temperature) if inter else b_obj.intra_distance_map(
                 contacts=contacts, temperature=temperature)
             b_cont_map = b_cont_map.mean(axis=1)
@@ -258,7 +264,10 @@ class Plotter(analysis.Analysis):
             distance_map = cont_map[T, :, :]
             if double and b:
                 distance_map[np.triu_indices_from(distance_map)] = b_cont_map[np.triu_indices_from(b_cont_map)]
-            img = self.axis.imshow(distance_map, cmap=cmap, vmin=vmin, vmax=vmax)
+            img = self.axis.imshow(distance_map, cmap=cmap, vmin=0, vmax=0.005)
+            if self.chains != 1:
+                extra_distance_map = extra_cont_map[T, :, :]
+                img2 = self.axis2.imshow(extra_distance_map, cmap=cmap, vmin=0, vmax=0.005)
             cmap.set_bad('red', alpha=0.15)
 
         if b:
@@ -282,9 +291,26 @@ class Plotter(analysis.Analysis):
         elif self.chain_atoms == 448:
             self.axis.axvspan(403, 410, color='black', alpha=0.3, label='E4')
         cb = self.figure.colorbar(img, orientation='horizontal', fraction=0.046, pad=0.08)
-        cb.set_label(cmap_label, fontsize=20)
+        cb.set_label(cmap_label, fontsize=16)
         cb.ax.tick_params(labelsize=16)
         self.axis.set_adjustable('box', True)
+
+        for i, q in enumerate(q_total):
+            if q < 0:
+                self.axis2.axvline(i, alpha=0.2, color='red')
+            if q > 0:
+                self.axis2.axvline(i, alpha=0.2, color='blue')
+        self.figure2.subplots_adjust(left=0, right=1)
+        self.axis2.invert_yaxis()
+        if b:
+            if self.chain_atoms == 448 and b_obj.chain_atoms == 448:
+                self.axis2.axvspan(403, 410, color='black', alpha=0.3, label='E4')
+        elif self.chain_atoms == 448:
+            self.axis2.axvspan(403, 410, color='black', alpha=0.3, label='E4')
+        cb = self.figure2.colorbar(img2, orientation='horizontal', fraction=0.046, pad=0.08)
+        cb.set_label(cmap_label, fontsize=16)
+        cb.ax.tick_params(labelsize=16)
+        self.axis2.set_adjustable('box', True)
         return cont_map
 
     def plot_dijs(self, r0=5.5, plot_flory_fit=False, plot_ideal_fit=False):

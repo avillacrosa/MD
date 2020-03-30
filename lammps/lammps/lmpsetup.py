@@ -218,9 +218,9 @@ class LMPSetup:
         os.chdir(self.o_wd)
         out = run(command.split(), stdout=PIPE, stderr=PIPE, universal_newlines=True)
         os.chdir(old_wd)
-        for proc in psutil.process_iter():
-            if proc.name() == 'lmp':
-                proc.kill()
+        # for proc in psutil.process_iter():
+        #     if proc.name() == 'lmp':
+        #         proc.kill()
         return out
 
     # TODO : KWARGS ?

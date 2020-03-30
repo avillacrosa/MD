@@ -18,8 +18,10 @@ class LMP:
     LMP is a base class to translate parameters of a finished or running LAMMPS run to python.
     It can also perform some basic transformations like reorder a replica exchange
     """
-    def __init__(self, oliba_wd, force_reorder=False, equil_frames=300):
+    def __init__(self, oliba_wd, force_reorder=False, equil_frames=300, silent=False):
         self.o_wd = oliba_wd
+
+        self.silent=silent
 
         self.lmp2pdb = definitions.lmp2pdb
         self.lmp = definitions.lmp
@@ -104,7 +106,7 @@ class LMP:
             data.append(dat)
         data = np.array(data)
         ran_steps = int(data[:, :, 0].mean(axis=0).max())
-        if progress and prog and not self.rerun:
+        if progress and prog and not self.rerun and not self.silent:
             print(f"> Run Completed at {ran_steps/np.array(prog).mean()*100:.2f}% for {self.protein}. Ran {ran_steps:.0f} steps for a total of {data.shape[1]} frames ")
         return data
 
@@ -379,10 +381,11 @@ class LMP:
                 if total_frames:
                     if int(tr.n_frames/every) < total_frames:
                         every = int(tr.n_frames/total_frames)-1
+                        if every == 0: every = 1
                 tr = tr[self.equil_frames::every]
                 tr = tr[-total_frames:]
             structures.append(tr)
-        if total_frames is not None and not self.rerun:
+        if total_frames is not None and not self.rerun and not self.silent:
             print(f"> Taking frames every {every} for a total of {total_frames} to avoid strong correlations")
             self.last_frames = total_frames
             self.every_frames = every

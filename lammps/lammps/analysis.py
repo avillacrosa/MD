@@ -10,10 +10,12 @@ import scipy
 import time
 import definitions
 import lmpsetup
-import multiprocessing as mp
+import pathos.multiprocessing as mp
+import multiprocessing as mpp
 import statsmodels.tsa.stattools
 from scipy.optimize import curve_fit
 import MDAnalysis.analysis as mda
+import scipy.integrate as integrate
 from MDAnalysis.analysis import contacts as compute_contacts
 from numba import jit
 
@@ -47,7 +49,6 @@ class Analysis(lmp.LMP):
         if temperature is not None:
             structures = [structures[temperature]]
         for traj in structures:
-            # TODO: TEST FIRST PART OF IF
             pairs = list(itertools.product(range(traj.top.n_atoms - 1), range(1, traj.top.n_atoms)))
             d = md.compute_distances(traj, pairs)
             d = md.geometry.squareform(d, pairs)
@@ -57,20 +58,23 @@ class Analysis(lmp.LMP):
             contact_maps.append(contact_map)
         return np.array(contact_maps)
 
-    def inter_distance_map(self, contacts=False, temperature=None):
+    def async_inter_distance_map(self, contacts=False, temperature=None):
         """
         Calculate both intrachain and interchain distances using MDTraj for the multichain case
         :param contacts: bool, compute contacts instead of distances
         :param temperature: int, temperature index if we wish to compute a single T (if temper)
         :return: ndarray[T, n_atoms, n_atoms], distances per temperature (saving per frame is too costly)
         """
-        def parallel_calc(traj, frames):
+
+        def parallel_calc(initial_frame, final_frame, i):
             inter_chain = np.zeros(shape=(self.chains, self.chain_atoms, self.chain_atoms), dtype='float64')
             intra_chain = np.zeros(shape=(self.chains, self.chain_atoms, self.chain_atoms), dtype='float64')
-            for f in frames:
-                for c1 in range(self.chains):
+            traj = structures[i]
+            for frame in range(initial_frame, final_frame):
+                print(frame)
+                for c1 in range(chain_runner):
                     inter, intra = [], []
-                    for c2 in range(self.chains):
+                    for c2 in range(chain_runner):
                         pairs = list(itertools.product(range(c1 * self.chain_atoms, (c1 + 1) * self.chain_atoms),
                                                        range(c2 * self.chain_atoms, (c2 + 1) * self.chain_atoms)))
                         d = md.compute_distances(traj[-frame], pairs)
@@ -86,24 +90,70 @@ class Analysis(lmp.LMP):
                     intra = np.array(intra)
                     inter_chain[c1, :, :] += inter.sum(axis=0)
                     intra_chain[c1, :, :] += intra[0, :, :]
+            inter_chain /= final_frame - initial_frame
+            inter_chain = inter_chain.sum(axis=0)
+            intra_chain = intra_chain.mean(axis=0)
+            intra_chain = intra_chain/(final_frame - initial_frame)
+            return inter_chain, intra_chain
 
+        if temperature is not None:
+            structures = [self.structures[temperature]]
+        if self.chains == 1:
+            raise SystemError("Demanded interchain distances but only a single chain is present!")
+
+        structures = self.structures
+        if temperature is not None:
+            structures = [self.structures[temperature]]
+        chain_runner = self.chains
+
+        flat_pairs = list(itertools.product(range(self.chain_atoms), range(self.chain_atoms)))
+
+        nthreads = 4
+        p = mp.Pool()
+
+        r_objs = []
+        final_results = []
+        for i in range(len(structures)):
+            structures[i] = structures[i][:10]
+            print("FRAMES!", structures[i].n_frames)
+            frange = np.linspace(0, structures[i].n_frames, nthreads+1, dtype='int')
+            frange = np.array([frange, np.roll(frange, -1)]).T
+            frange = frange[:-1, :]
+            for ra in frange:
+                r_objs.append(p.apply_async(parallel_calc, [ra[0], ra[1], i]))
+            print(" " * 40, end='\r')
+            results = [r.get() for r in r_objs]
+            p.close()
+            p.join()
+            results = np.array(results).sum(axis=0) / np.array(results).shape[0]
+            final_results.append(results)
+        final_results = np.array(final_results)
+        return final_results[:, 0], final_results[:, 1]
+
+    def inter_distance_map(self, contacts=False, temperature=None):
+        """
+        Calculate both intrachain and interchain distances using MDTraj for the multichain case
+        :param contacts: bool, compute contacts instead of distances
+        :param temperature: int, temperature index if we wish to compute a single T (if temper)
+        :return: ndarray[T, n_atoms, n_atoms], distances per temperature (saving per frame is too costly)
+        """
         if self.chains == 1:
             raise SystemError("Demanded interchain distances but only a single chain is present!")
         structures = self.structures.copy()
         inter_cmap, intra_cmap = [], []
         if temperature is not None:
             structures = [structures[temperature]]
-        chain_runner, frame_runner = 50, 10
+        chain_runner = self.chains
         flat_pairs = list(itertools.product(range(self.chain_atoms), range(self.chain_atoms)))
         for traj in structures:
             inter_chain = np.zeros(shape=(self.chains, self.chain_atoms, self.chain_atoms), dtype='float64')
             intra_chain = np.zeros(shape=(self.chains, self.chain_atoms, self.chain_atoms), dtype='float64')
-            for frame in range(frame_runner):
-                print(frame)
-                for c1 in range(self.chains):
+            for frame in range(traj.n_frames):
+                print(frame, end='\r')
+                for c1 in range(chain_runner):
                     # TODO : MAYBE ONLY UPPER OR LOWER TRIANGLE ?
                     inter, intra = [], []
-                    for c2 in range(self.chains):
+                    for c2 in range(chain_runner):
                         pairs = list(itertools.product(range(c1 * self.chain_atoms, (c1 + 1) * self.chain_atoms),
                                                        range(c2 * self.chain_atoms, (c2 + 1) * self.chain_atoms)))
                         d = md.compute_distances(traj[-frame], pairs)
@@ -119,10 +169,11 @@ class Analysis(lmp.LMP):
                     intra = np.array(intra)
                     inter_chain[c1, :, :] += inter.sum(axis=0)
                     intra_chain[c1, :, :] += intra[0, :, :]
-            inter_chain /= frame_runner
+            inter_chain /= traj.n_frames
             inter_chain = inter_chain.sum(axis=0)
             inter_cmap.append(inter_chain)
-            intra_cmap.append(intra_cmap)
+            intra_chain = intra_chain.mean(axis=0)
+            intra_cmap.append(intra_chain/traj.n_frames)
         return np.array(inter_cmap), np.array(intra_cmap)
 
     def ij_from_contacts(self, contacts=None):
@@ -243,20 +294,21 @@ class Analysis(lmp.LMP):
         :return:
         """
         lseq = list(self.sequence)
+
         og_time = int(np.max(self.data[T, :, 0]))
         og_save = int(self.data[T, 1, 0])
-        # every = self.every_frames
-        every = 1
+
         lnewseq = list(new_seq)
         lseq[289:373] = lnewseq[:]
         sequence = ''.join(lseq)
         rerun = lmpsetup.LMPSetup(oliba_wd=temp_dir, protein="TDP43", temper=False, equil_start=False)
         rerun.rerun_dump = f'atom_traj_tdp.lammpstrj'
         rerun.sequence = sequence
-        rerun.rerun_skip = int(every)
-        # rerun.rerun_start = int(og_time + og_save - every*self.last_frames*og_save)
-        rerun.rerun_start = int(og_time + og_save - every*1500*og_save)
+
+        rerun.rerun_skip = int(self.every_frames)
+        rerun.rerun_start = int(og_time + og_save - self.every_frames*self.last_frames*og_save)
         rerun.rerun_stop = og_time
+
         rerun.box_size = 2500
         rerun.temperatures = [self.get_temperatures()[T]]
         rerun.write_hps_files(rerun=True, data=True, qsub=False, slurm=False, readme=False, rst=False, pdb=False, silent=True)
@@ -265,9 +317,14 @@ class Analysis(lmp.LMP):
         os.system(self.lmp2pdb + ' ' + os.path.join(temp_dir, 'data'))
         r_analysis = Analysis(oliba_wd=temp_dir)
         rrg = r_analysis.rg()[0]
-        lmprg = r_analysis.data[0,:,-1].mean()
-        print(lmprg)
-        return rrg.mean(), lmprg
+        lmprg = r_analysis.data[0, :, -1].mean()
+        og_data = self.data[T, self.equil_frames::self.every_frames, :]
+        og_data = og_data[-self.last_frames:, :]
+        weights = self.weights(Ei=og_data[:, 1], Ef=r_analysis.data[0, :, 1], T = self.get_temperatures()[T])
+        weights = weights/np.sum(weights)
+        n_eff = self.n_eff(weights)
+        rew_rg = np.dot(weights, self.rg()[T, :])
+        return rrg.mean(), lmprg, rew_rg, n_eff
 
     def minimize(self, a_dir, b_dir, T, method='sto', temp_dir='/home/adria/OPT',
                  I0=None, l0=None, eps0=None, savefile='stomin.txt', weight_cost_mean=1):
@@ -441,6 +498,21 @@ class Analysis(lmp.LMP):
         w = np.exp(-(Ef-Ei)/(kb*T))
         return w
 
+    def B2(self, T):
+        g_x = self.density_profile(T=T)
+        bins, data = np.histogram(g_x, bins=25)
+
+        def f(x):
+            idx_sup = np.where(bins == np.min(bins[bins > x]))[0][0]
+            idx_inf = np.where(bins == np.max(bins[bins < x]))[0][0]
+            slope = (data[idx_sup] - data[idx_inf]) / (
+                    bins[idx_sup] - bins[idx_inf])
+            intersect = data[idx_sup] - slope * bins[idx_sup]
+            g = slope * x + intersect
+            return (1-g)*x*x
+        B2 = integrate.quad(f, 0, np.inf)
+        return B2
+
     def block_error(self, observable, block_length=10):
         """
         Find statistical error through block averaging. Observable needs to be in shape (T, frames) (assuming Temper)
@@ -450,6 +522,7 @@ class Analysis(lmp.LMP):
         """
         mean = observable.mean(axis=1)
         errors = []
+
         for T in range(0, observable.shape[0]):
             err = 0
             n_blocks = 0
@@ -573,7 +646,36 @@ class Analysis(lmp.LMP):
         return np.array(coms_temp)
 
 
-mpi_results = []
+
+# def wrapper_top(traj, chains, chain_atoms, flat_pairs, contacts, chain_runner):
+#     def parallel_calc_top(frames):
+#
+#         inter_chain = np.zeros(shape=(chains, chain_atoms, chain_atoms), dtype='float64')
+#         intra_chain = np.zeros(shape=(chains, chain_atoms, chain_atoms), dtype='float64')
+#         for frame in range(frames[0], frames[1]):
+#             print(frame)
+#             for c1 in range(chain_runner):
+#                 inter, intra = [], []
+#                 for c2 in range(chain_runner):
+#                     pairs = list(itertools.product(range(c1 * chain_atoms, (c1 + 1) * chain_atoms),
+#                                                    range(c2 * chain_atoms, (c2 + 1) * chain_atoms)))
+#                     d = md.compute_distances(traj[-frame], pairs)
+#                     d = md.geometry.squareform(d, flat_pairs) * 10
+#                     d = d[0]
+#                     if contacts:
+#                         d = mda.contacts.contact_matrix(d, radius=6)
+#                     if c1 != c2:
+#                         inter.append(d)
+#                     elif c1 == c2:
+#                         intra.append(d)
+#                 inter = np.array(inter)
+#                 intra = np.array(intra)
+#                 inter_chain[c1, :, :] += inter.sum(axis=0)
+#                 intra_chain[c1, :, :] += intra[0, :, :]
+#         inter_chain /= frames[1]-frames[0]
+#         inter_chain = inter_chain.sum(axis=0)
+#         return inter_chain, intra_chain
+#     return parallel_calc_top
 
 
 def full_flory_scaling(x, flory, r0):

@@ -1,7 +1,7 @@
 #!/bin/bash
 
 #$ -pe smp $np
-#$ -q all.q
+#$ -q all.q@perdiu39
 #$ -l mem_free=10G
 #$ -N $jobname
 #$ -M adria.villacrosa@irbbarcelona.org
