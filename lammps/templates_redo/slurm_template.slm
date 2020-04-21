@@ -1,0 +1,12 @@
+#!/bin/bash
+#SBATCH -J $jobname
+#SBATCH -e err.HPS
+#SBATCH -o out.HPS
+#SBATCH -p std
+#SBATCH --ntasks=$np
+#SBATCH --time=3-0:00
+
+module purge
+module load apps/lammps/31Aug2018
+
+$command

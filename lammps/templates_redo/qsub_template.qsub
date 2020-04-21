@@ -1,12 +1,14 @@
 #!/bin/bash
 
 #$ -pe smp $np
-#$ -q all.q@perdiu39
+#$ -q all.q$host
 #$ -l mem_free=10G
 #$ -N $jobname
 #$ -M adria.villacrosa@irbbarcelona.org
 #$ -o $work_dir/out.hps
 #$ -e $work_dir/err.hps
+
+module load openmpi/202_gcc630
 
 echo $HOSTNAME
 cd $work_dir
