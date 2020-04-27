@@ -14,14 +14,13 @@ import matplotlib.pyplot as plt
 
 
 class Plotter(analysis.Analysis):
-    def __init__(self, force_recalc=False, max_frames=1000):
+    def __init__(self, data_dir=None, force_recalc=False, max_frames=1000):
         """
         Just a helper for plotting. Many things (paths and what not) are really arbitrary.
         :param force_recalc: bool, Useless atm
         """
         super().__init__(oliba_wd=None, max_frames=max_frames)
-        self.oliba_prod_dir = '/home/adria/data/prod/lammps'
-        self.oliba_data_dir = '/home/adria/data/data'
+        self.oliba_prod_dir = data_dir if data_dir is not None else '/home/adria/data/prod/lammps'
         self.index = self.make_index()
 
         self.figure, self.axis = None, None
@@ -35,6 +34,7 @@ class Plotter(analysis.Analysis):
         self.title_fsize = 20
         self.label_fsize = 16
         self.ticks_fsize = 14
+        self.this = os.path.dirname(__file__)
         # TODO HARD CODED...
         self.temperatures = None
 
@@ -46,7 +46,8 @@ class Plotter(analysis.Analysis):
         self.obs_data = None
         self.plot_id = None
 
-        self.observables = ['rg', 'distance_map', 'contact_map', 'dij', 'flory', 'charge', 'rho', 'rg_distr']
+        self.observables = ['rg', 'distance_map', 'contact_map', 'dij', 'flory',
+                            'charge', 'rho', 'rg_distr', 'inter_r', 'clusters']
         self.force_recalc = force_recalc
 
         self.rg_Tc_legend_helper = {}
@@ -59,8 +60,8 @@ class Plotter(analysis.Analysis):
         :param force_update: bool, useless atm
         :return: dataframe, contains some parameters of a given run, along its path and what protein
         """
-        if os.path.exists(os.path.join(definitions.module_dir, 'index.txt')) and not force_update:
-            df = pd.read_csv(os.path.join(definitions.module_dir, 'index.txt'), sep=' ', index_col=0)
+        if os.path.exists(os.path.join(self.this, 'index.txt')) and not force_update:
+            df = pd.read_csv(os.path.join(self.this, 'index.txt'), sep=' ', index_col=0)
             return df
         lmp_dirs = self.get_lmp_dirs(self.oliba_prod_dir)
         df = pd.DataFrame({
@@ -81,7 +82,7 @@ class Plotter(analysis.Analysis):
             prots.append(protein)
             eps, I, scale = None, None, None
             lj_lambda_line = None
-            lmp_path = glob.glob(os.path.join(d, 'lmp.lmp'))
+            lmp_path = glob.glob(os.path.join(d, 'lmp*.lmp'))
             self._get_hps_params()
             if lmp_path:
                 log_lmp = open(lmp_path[0], 'r')
@@ -93,6 +94,7 @@ class Plotter(analysis.Analysis):
                         eps = re.findall(r'\d+', line)[0]
                         epss.append(float(eps))
                     if "ljlambda" in line:
+                    # if "pair_style" in line:
                         lj_lambda_line = line
                     if lj_lambda_line and eps:
                         debye = re.findall(r'\d+\.?\d*', lj_lambda_line)[0]
@@ -117,7 +119,7 @@ class Plotter(analysis.Analysis):
         # TODO: Remove "Name" ? Seems pretty useless
         df["Name"] = paths
         df["FullPath"] = lmp_dirs
-        df.to_csv(os.path.join(definitions.module_dir, 'index.txt'), sep=' ', mode='w')
+        df.to_csv(os.path.join(self.this, 'index.txt'), sep=' ', mode='w')
         return df
 
     def plot(self, observable, index, plot_id, **kwargs):
@@ -131,6 +133,10 @@ class Plotter(analysis.Analysis):
         :return: data, data being plotted, in whatever shape (depends on observable)
         """
         self.plot_id = plot_id
+        self.figure = None
+        self.axis = None
+        # TODO : THIS LINE IS SO PROBLEMATIC...
+        # self.plots = {}
         if observable not in self.observables:
             print(f"Observable not found. Available ones are : {self.observables}")
             return
@@ -183,14 +189,18 @@ class Plotter(analysis.Analysis):
             self.axis2.xaxis.set_tick_params(labelsize=self.ticks_fsize)
             self.axis2.yaxis.set_tick_params(labelsize=self.ticks_fsize)
         if observable == 'dij':
-            data = self.plot_dijs(plot_flory_fit=True, plot_ideal_fit=False)[1]
+            data = self.plot_dijs(plot_flory_fit=True, plot_ideal_fit=False, **kwargs)[1]
             self.dijs[protein] = data
         if observable == 'flory':
             data = self.plot_flory(**kwargs)
+        if observable == 'inter_r':
+            data = self.plot_distance_between_chains(**kwargs)
         if observable == 'charge':
             data = self.plot_q_distr(**kwargs)
         if observable == 'rg_distr':
-            data = self.plot_rg_distr(T=5, **kwargs)
+            data = self.plot_rg_distr(T=6, **kwargs)
+        if observable == 'clusters':
+            data = self.plot_clusters(**kwargs)
         if observable == 'rho':
             temperature = kwargs["temperature"] if "temperature" in kwargs else 0
             data = self.plot_density_profile(T=temperature)
@@ -200,7 +210,7 @@ class Plotter(analysis.Analysis):
         # if self.obs_data is None:
         #     pathlib.Path(d).mkdir(parents=True, exist_ok=True)
         #     np.savetxt(os.path.join(d, 'data.txt'), data)
-        self.figure.savefig(os.path.join(definitions.module_dir, f'temp/plot_{plot_id}.png'))
+        self.figure.savefig(os.path.join(self.this, f'temp/plot_{plot_id}.png'))
         return data
 
     def plot_distance_map(self, **kwargs):
@@ -217,26 +227,20 @@ class Plotter(analysis.Analysis):
         vmin = kwargs["vmin"] if "vmin" in kwargs else None
         vmax = kwargs["vmax"] if "vmax" in kwargs else None
         cmap_label = kwargs["cmap_label"] if "cmap_label" in kwargs else None
+        normed = kwargs["normed"] if "normed" in kwargs else None
         b = self.index.iloc[kwargs["index2"]]["FullPath"] if "index2" in kwargs else None
 
         def_cmap = 'PRGn' if b else 'plasma'
         cmap = kwargs["cmap"] if "cmap" in kwargs else def_cmap
         cmap = matplotlib.cm.get_cmap(cmap)
 
-        if frac and log:
-            raise SystemExit("Can't do both log and frac. Choose one")
-        if log and not b or frac and not b:
-            raise SystemExit("log/frac plots only available for 2 proteins")
-
         # TODO : ONLY TAKING INTERCHAIN INTO ACCOUNT HERE
-        # cont_map = self.inter_distance_map(contacts=contacts, temperature=temperature)[
         if self.chains != 1:
-            # cont_map = self.async_inter_distance_map(contacts=contacts, temperature=temperature)[1]
-            cont_map, extra_cont_map = self.inter_distance_map(contacts=contacts, temperature=temperature)
+            cont_map, extra_cont_map = self.async_inter_distance_map(contacts=contacts, temperature=temperature)
+            # cont_map, extra_cont_map = self.inter_distance_map(contacts=contacts, temperature=temperature)
         else:
-            cont_map = self.intra_distance_map(contacts=contacts, temperature=temperature)
-            cont_map = cont_map.mean(axis=1)
-
+            cont_map = self.intra_distance_map(contacts=contacts, temperature=temperature).mean(axis=1)
+# RC = dij = 1.12 * sqrt(abs(i-j))
         if b:
             b_obj = analysis.Analysis(oliba_wd=b)
             b_cont_map = b_obj.async_inter_distance_map(contacts=contacts,
@@ -310,10 +314,11 @@ class Plotter(analysis.Analysis):
         cb = self.figure2.colorbar(img2, orientation='horizontal', fraction=0.046, pad=0.08)
         cb.set_label(cmap_label, fontsize=16)
         cb.ax.tick_params(labelsize=16)
+
         self.axis2.set_adjustable('box', True)
         return cont_map
 
-    def plot_dijs(self, r0=5.5, plot_flory_fit=False, plot_ideal_fit=False):
+    def plot_dijs(self, r0=5.5, plot_flory_fit=False, plot_ideal_fit=False, **kwargs):
         """
         Plot the d(i-j) as calculated from the analysis library
         :param r0: float, r0 used to perform the flory scaling fit
@@ -322,10 +327,14 @@ class Plotter(analysis.Analysis):
         :return: list[n_atoms], list[n_atoms], abs(i-j), d(abs(i-j))
         """
         # TODO : FIX DOUBLE CALLING FIRST ONE HERE EXPLICIT
-        ijs, means, err = self.ij_from_contacts()
+        ijs, means, err = kwargs.get('data', self.ij_from_contacts())
         if plot_flory_fit:
-            # TODO : SECOND CALL IS HERE IMPLICIT
-            florys = self.flory_scaling_fit(r0=r0, ijs=[ijs, means, err])[0]
+            skip_15 = kwargs.get('skip_15', False)
+            if skip_15:
+                florys = self.flory_scaling_fit(r0=r0, ijs=[ijs[15:], means[:, 15:], err[:, 15:]])[0]
+            else:
+                florys = self.flory_scaling_fit(r0=r0, ijs=[ijs, means, err])[0]
+            print(florys)
 
         self.axis.set_xlabel("|i-j|", fontsize=self.label_fsize)
         self.axis.set_ylabel(r'dij ($\AA$)', fontsize=self.label_fsize)
@@ -335,7 +344,7 @@ class Plotter(analysis.Analysis):
             if plot_flory_fit:
                 flory = florys[i]
                 # self.axis.plot(ijs, r0 * np.array(ijs) ** flory, '--', label=f"Fit to {r0:.1f}*N^{flory:.3f}", color=self.color)
-                self.axis.plot(ijs, r0 * np.array(ijs) ** flory, '--', color=p[0].get_color())
+                self.axis.plot(ijs, r0 * np.array(ijs) ** flory, '--', color=p[0].get_color(), label='Fit')
             if plot_ideal_fit:
                 self.axis.plot(ijs, np.array(ijs) ** 0.5 * r0, '--', label="Random Coil Scaling (5.5*N^0.5)",
                                color=p[0].get_color(), zorder=2)
@@ -345,7 +354,7 @@ class Plotter(analysis.Analysis):
             capline[0].set_markersize(10)
             capline[1].set_marker('_')
             capline[1].set_markersize(10)
-        return ijs, means
+        return ijs, means, err
 
     def plot_rg(self, **kwargs):
         """
@@ -356,7 +365,7 @@ class Plotter(analysis.Analysis):
         # if self.obs_data is not None:
         #     rg = self.obs_data
         # else:
-        rg = self.rg(use='md')
+        rg = kwargs.get('data', self.rg())
         err_bars = self.block_error(observable=rg)
         self.axis.set_ylabel(r"Rg ($\AA$)", fontsize=self.label_fsize)
         self.axis.set_xlabel("T (K)", fontsize=self.label_fsize)
@@ -394,7 +403,6 @@ class Plotter(analysis.Analysis):
         bins = kwargs["bins"] if "bins" in kwargs else 'auto'
         alpha = kwargs["alpha"] if "alpha" in kwargs else 0.5
         rg = self.rg(use='md')[T, :]
-        print(rg.shape)
 
         kde_scipy = scipy.stats.gaussian_kde(rg)
 
@@ -404,8 +412,47 @@ class Plotter(analysis.Analysis):
         self.axis.hist(rg, bins=bins, alpha=alpha, density=True, label=self.label, color=p[0].get_color())
         self.axis.set_ylabel("P(Rg)", fontsize=self.label_fsize)
         self.axis.set_xlabel("Rg", fontsize=self.label_fsize)
-        self.axis.set_xlim(0,200)
+        self.axis.set_xlim(0, 200)
         return rg
+
+    def plot_distance_between_chains(self, **kwargs):
+        temperature = kwargs["temperature"] if "temperature" in kwargs else None
+        coms = self.chain_coms()
+        mbox = 0
+        for key in self.box:
+            mbox += np.abs(np.array(self.box[key], dtype='float')).sum()
+        mbox=mbox/3
+        if temperature is not None:
+            dist = np.linalg.norm(coms[temperature, 0, :, :]-coms[temperature, 1, :, :], axis=1)
+            self.axis.plot(dist)
+        else:
+            dist = np.linalg.norm(coms[:, 0, :, :]-coms[:, 1, :, :], axis=2)
+            for T in range(len(self.temperatures)):
+                self.axis.plot(dist[T, :], label=T)
+        self.axis.axhline(mbox, ls='--')
+        self.axis.axhline(mbox/2, ls='--')
+        return dist
+
+    def plot_clusters(self, **kwargs):
+        temperature = kwargs["temperature"] if "temperature" in kwargs else None
+
+        frame_clust, lclust = [], []
+
+        if temperature is None:
+            temperatures = range(len(self.temperatures))
+        else:
+            temperatures = [temperature]
+
+        if not self.temper:
+            temperatures = [0]
+
+        for T in temperatures:
+            clusters = self.clusters(T)[0]
+            for clust in clusters:
+                frame_clust.append(len(clust))
+            frame_clust = np.array(frame_clust)
+            self.axis.plot(frame_clust)
+        return frame_clust
 
     def plot_flory(self, r0=5.5, **kwargs):
         """
@@ -492,6 +539,13 @@ class Plotter(analysis.Analysis):
             self.axis.plot(x, kde_scipy(x))
         self.axis.legend()
 
+    def clean(self, plot_id):
+        if plot_id in self.plots:
+            del self.plots[plot_id]
+
+    def display(self, plot_id):
+        return self.plots[plot_id][0]
+
     # TODO !!!! Still need to be translated, but they are pretty niche atm !!!!
     def plot_aa_map(dir, seq, ref_dir=None):
         """
@@ -525,13 +579,3 @@ class Plotter(analysis.Analysis):
         cb.set_label(r'd ($\AA$)')
         print("SAVING AT ../default_output/res_map.png")
         plt.savefig('../default_output/res_map.png')
-        plt.show()
-
-    def clean(self):
-        """
-        This has to be deprecated as it shouldn't be needed, but it currently is due to bad coding...
-        :return:
-        """
-        self.plots = {}
-        self.figure = None
-        self.axis = None

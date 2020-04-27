@@ -28,7 +28,6 @@ class Analysis(lmp.LMP):
         :param kw: kwargs
         """
         super().__init__(**kw)
-        self.equilibration = 3e6
 
         self.ijs = None
         self.rgs = None
@@ -59,6 +58,7 @@ class Analysis(lmp.LMP):
         return np.array(contact_maps)
 
     def async_inter_distance_map(self, contacts=False, temperature=None):
+        print("PARALLEL CALC")
         """
         Calculate both intrachain and interchain distances using MDTraj for the multichain case
         :param contacts: bool, compute contacts instead of distances
@@ -71,7 +71,6 @@ class Analysis(lmp.LMP):
             intra_chain = np.zeros(shape=(self.chains, self.chain_atoms, self.chain_atoms), dtype='float64')
             traj = structures[i]
             for frame in range(initial_frame, final_frame):
-                print(frame)
                 for c1 in range(chain_runner):
                     inter, intra = [], []
                     for c2 in range(chain_runner):
@@ -110,17 +109,16 @@ class Analysis(lmp.LMP):
 
         nthreads = 4
         p = mp.Pool()
-
+        obj = self
         r_objs = []
         final_results = []
         for i in range(len(structures)):
-            structures[i] = structures[i][:10]
-            print("FRAMES!", structures[i].n_frames)
             frange = np.linspace(0, structures[i].n_frames, nthreads+1, dtype='int')
             frange = np.array([frange, np.roll(frange, -1)]).T
             frange = frange[:-1, :]
             for ra in frange:
-                r_objs.append(p.apply_async(parallel_calc, [ra[0], ra[1], i]))
+                # r_objs.append(p.apply_async(parallel_calc, [ra[0], ra[1], i]))
+                r_objs.append(p.apply_async(top_parallel_calc, [ra[0], ra[1], i, obj, flat_pairs]))
             print(" " * 40, end='\r')
             results = [r.get() for r in r_objs]
             p.close()
@@ -149,7 +147,7 @@ class Analysis(lmp.LMP):
             inter_chain = np.zeros(shape=(self.chains, self.chain_atoms, self.chain_atoms), dtype='float64')
             intra_chain = np.zeros(shape=(self.chains, self.chain_atoms, self.chain_atoms), dtype='float64')
             for frame in range(traj.n_frames):
-                print(frame, end='\r')
+                print(f"{frame}/{traj.n_frames}", end='\r')
                 for c1 in range(chain_runner):
                     # TODO : MAYBE ONLY UPPER OR LOWER TRIANGLE ?
                     inter, intra = [], []
@@ -208,6 +206,7 @@ class Analysis(lmp.LMP):
             tot_ijs, tot_means, err = self.ij_from_contacts()
         else:
             tot_ijs, tot_means, err = ijs[0], ijs[1], ijs[2]
+
         florys, r0s, covs = [], [], []
         for T in range(len(self.get_temperatures())):
             ij = tot_ijs
@@ -264,7 +263,6 @@ class Analysis(lmp.LMP):
             data = self.get_lmp_data()
             for run in range(data.shape[0]):
                 # TODO INCORPORATE EQUILIBRATION EVERYWHERE
-                # rg_frame = data[run, data[run, :, 0] > self.equilibration, 4]
                 rg_frame = data[run, :, 4]
                 rgs.append(rg_frame)
         if use == 'md':
@@ -513,7 +511,7 @@ class Analysis(lmp.LMP):
         B2 = integrate.quad(f, 0, np.inf)
         return B2
 
-    def block_error(self, observable, block_length=10):
+    def block_error(self, observable, n_blocks=5):
         """
         Find statistical error through block averaging. Observable needs to be in shape (T, frames) (assuming Temper)
         :param observable: ndarray[T, frames], observable data
@@ -522,14 +520,12 @@ class Analysis(lmp.LMP):
         """
         mean = observable.mean(axis=1)
         errors = []
-
         for T in range(0, observable.shape[0]):
             err = 0
-            n_blocks = 0
-            for r in range(0, observable.shape[1]-block_length, block_length):
-                rng = slice(r, r+block_length)
+            blocks = np.linspace(0, observable.shape[1], n_blocks+1, dtype='int')
+            for r in range(n_blocks):
+                rng = slice(blocks[r], blocks[r+1])
                 err += (observable[T, rng].mean() - mean[T])**2
-                n_blocks += 1
             errors.append(np.sqrt(err)/n_blocks)
         return np.array(errors)
 
@@ -555,7 +551,7 @@ class Analysis(lmp.LMP):
     def chain_coms(self):
         """
         Get the center of masses for every chain
-        :return: ndarray[nchains,3], center of mass
+        :return: ndarray[T, nchains, frames, 3], center of mass
         """
         sequence = self.get_seq_from_hps()
         m_i = []
@@ -575,7 +571,7 @@ class Analysis(lmp.LMP):
                 coms[T, c, :] = com
         return coms
 
-    def clusters(self, T, cutoff=50):
+    def clusters(self, T=0, cutoff=50):
         """
         Get clusters of chains for each frame. We define a cluster all those chains that are less than "cutoff" amstrongs apart
         from each other
@@ -583,9 +579,13 @@ class Analysis(lmp.LMP):
         :param cutoff: float, distance limit where we consider a cluster
         :return: list[frames, clusters], list[frames,3], non regular list containing all clusters per frame, center of masses per frame (essentially chain_coms for a given T)
         """
+        f_xyz = self.chain_coms()
+        if T is None:
+            temperatures = range(len(self.structures))
+        else:
+            temperatures = [T]
         def run(chain, filling):
             if chain not in taken:
-                # clusters[chain] = [chain]
                 clusters.append([chain])
                 filling = chain
             for i, d in enumerate(d_matrix[chain]):
@@ -596,23 +596,25 @@ class Analysis(lmp.LMP):
                     run(i, filling)
 
         nchains = self.chains
-        f_xyz = self.chain_coms()
-        f_xyz = f_xyz[T, :, :]
-        f_clust = []
+        f_clust, T_clust = [], []
+        for T in temperatures:
+            print(f"Doing temperature {T}", self.structures[T])
+            f_clust = []
+            for f in range(self.structures[T].n_frames):
+                print(f'{f}/{self.structures[T].n_frames}', end='\r')
+                xyz = f_xyz[T, :, f, :]
+                d_matrix = np.zeros(shape=(nchains, nchains))
+                for i, d1 in enumerate(xyz):
+                    for j, d2 in enumerate(xyz):
+                        d_matrix[i][j] = np.linalg.norm(d1 - d2)
 
-        for f in range(self.structures[T].n_frames):
-            xyz = f_xyz[:, f, :]
-            d_matrix = np.zeros(shape=(nchains, nchains))
-            for i, d1 in enumerate(xyz):
-                for j, d2 in enumerate(xyz):
-                    d_matrix[i][j] = np.linalg.norm(d1 - d2)
+                taken, clusters = [], []
 
-            taken, clusters = [], []
-
-            for chain in range(d_matrix.shape[0]):
-                run(chain, 0)
-            f_clust.append(clusters)
-        return f_clust, f_xyz
+                for chain in range(d_matrix.shape[0]):
+                    run(chain, 0)
+                f_clust.append(clusters)
+            T_clust.append(f_clust)
+        return T_clust, f_xyz
 
     def density_profile(self, T=None):
         """
@@ -646,36 +648,36 @@ class Analysis(lmp.LMP):
         return np.array(coms_temp)
 
 
-
-# def wrapper_top(traj, chains, chain_atoms, flat_pairs, contacts, chain_runner):
-#     def parallel_calc_top(frames):
-#
-#         inter_chain = np.zeros(shape=(chains, chain_atoms, chain_atoms), dtype='float64')
-#         intra_chain = np.zeros(shape=(chains, chain_atoms, chain_atoms), dtype='float64')
-#         for frame in range(frames[0], frames[1]):
-#             print(frame)
-#             for c1 in range(chain_runner):
-#                 inter, intra = [], []
-#                 for c2 in range(chain_runner):
-#                     pairs = list(itertools.product(range(c1 * chain_atoms, (c1 + 1) * chain_atoms),
-#                                                    range(c2 * chain_atoms, (c2 + 1) * chain_atoms)))
-#                     d = md.compute_distances(traj[-frame], pairs)
-#                     d = md.geometry.squareform(d, flat_pairs) * 10
-#                     d = d[0]
-#                     if contacts:
-#                         d = mda.contacts.contact_matrix(d, radius=6)
-#                     if c1 != c2:
-#                         inter.append(d)
-#                     elif c1 == c2:
-#                         intra.append(d)
-#                 inter = np.array(inter)
-#                 intra = np.array(intra)
-#                 inter_chain[c1, :, :] += inter.sum(axis=0)
-#                 intra_chain[c1, :, :] += intra[0, :, :]
-#         inter_chain /= frames[1]-frames[0]
-#         inter_chain = inter_chain.sum(axis=0)
-#         return inter_chain, intra_chain
-#     return parallel_calc_top
+def top_parallel_calc(initial_frame, final_frame, obj, i, flat_pairs):
+    inter_chain = np.zeros(shape=(obj.chains, obj.chain_atoms, obj.chain_atoms), dtype='float64')
+    intra_chain = np.zeros(shape=(obj.chains, obj.chain_atoms, obj.chain_atoms), dtype='float64')
+    traj = obj.structures[i]
+    traj = traj[:10]
+    for frame in range(initial_frame, final_frame):
+        for c1 in range(obj.chains):
+            inter, intra = [], []
+            for c2 in range(obj.chains):
+                pairs = list(itertools.product(range(c1 * obj.chain_atoms, (c1 + 1) * obj.chain_atoms),
+                                               range(c2 * obj.chain_atoms, (c2 + 1) * obj.chain_atoms)))
+                d = md.compute_distances(traj[-frame], pairs)
+                d = md.geometry.squareform(d, flat_pairs) * 10
+                d = d[0]
+                # if contacts:
+                if True:
+                    d = mda.contacts.contact_matrix(d, radius=6)
+                if c1 != c2:
+                    inter.append(d)
+                elif c1 == c2:
+                    intra.append(d)
+            inter = np.array(inter)
+            intra = np.array(intra)
+            inter_chain[c1, :, :] += inter.sum(axis=0)
+            intra_chain[c1, :, :] += intra[0, :, :]
+    inter_chain /= final_frame - initial_frame
+    inter_chain = inter_chain.sum(axis=0)
+    intra_chain = intra_chain.mean(axis=0)
+    intra_chain = intra_chain/(final_frame - initial_frame)
+    return inter_chain, intra_chain
 
 
 def full_flory_scaling(x, flory, r0):

@@ -1,7 +1,6 @@
 import os
 
-hps_data_dir = '/home/adria/scripts/data'
-module_dir = '/home/adria/scripts/lammps'
+hps_data_dir = os.path.dirname(__file__)
 movie_dir = '/home/adria/Movies'
 lmp2pdb = '/home/adria/perdiux/src/lammps-7Aug19/tools/ch2lmp/lammps2pdb.pl'
 lmp = '/home/adria/local/lammps/bin/lmp'

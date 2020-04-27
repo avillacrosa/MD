@@ -21,7 +21,7 @@ class LMP:
     def __init__(self, oliba_wd, force_reorder=False, equil_frames=300, silent=False):
         self.o_wd = oliba_wd
 
-        self.silent=silent
+        self.silent = silent
 
         self.lmp2pdb = definitions.lmp2pdb
         self.lmp = definitions.lmp
@@ -32,18 +32,20 @@ class LMP:
         self.every_frames, self.last_frames = None, None
         if self.o_wd is not None:
             self.data_file = self._get_data_file()
-            self.lmp_file = self._get_lmp_file()
+            self.lmp_files = self._get_lmp_files()
             self.temper = self._is_temper()
             self.rerun = self._is_rerun()
             self.log_files = self._get_log_files()
             self.topology_path = self._get_initial_frame()
 
-            self.protein = self.get_protein_from_sequence()
             self.chains, self.chain_atoms = self.get_n_chains()
+            self.box = self.get_box()
+            self.protein = self.get_protein_from_sequence()
             self.sequence = self.get_seq_from_hps()
             self.data = self.get_lmp_data()
             self.structures = None
             self.equil_frames = equil_frames
+            self.temperatures = self.get_temperatures()
 
     def get_lmp_dirs(self, path=None):
         """
@@ -54,8 +56,9 @@ class LMP:
         if path is None:
             path = self.o_wd
         dirs = []
-        for filename in pathlib.Path(path).rglob('lmp.lmp'):
-            dirs.append(os.path.dirname(filename))
+        for filename in pathlib.Path(path).rglob('lmp*.lmp'):
+            if os.path.dirname(filename) not in dirs:
+                dirs.append(os.path.dirname(filename))
         dirs.sort()
         return dirs
 
@@ -115,11 +118,12 @@ class LMP:
         Get medium permittivity from .lmp file
         :return: float Medium permittivity
         """
-        eps = 0
-        for line in self.lmp_file:
-            if "dielectric" in line:
-                eps = re.findall(r'\d+', line)[0]
-                break
+        eps = []
+        for lmp_file in self.lmp_files:
+            for line in lmp_file:
+                if "dielectric" in line:
+                    eps.append(re.findall(r'\d+', line)[0])
+                    break
         return eps
 
     def get_ionic_strength(self):
@@ -127,17 +131,18 @@ class LMP:
         Get the ionic_strength from .lmp file (by inverting Debye length)
         :return: float Ionic strength
         """
-        ionic_strength = 0
-        for line in self.lmp_file:
-            if "ljlambda" in line:
-                debye = re.findall(r'\d+\.?\d*', line)[0]
-                unroundedI = self.get_I_from_debye(float(debye), eps=float(self.get_eps()))
-                if unroundedI >= 0.1:
-                    ionic_strength = round(unroundedI, 1)
-                    break
-                else:
-                    ionic_strength = round(unroundedI, 3)
-                    break
+        ionic_strength = []
+        for i, lmp_file in enumerate(self.lmp_files):
+            for line in lmp_file:
+                if "ljlambda" in line:
+                    debye = re.findall(r'\d+\.?\d*', line)[0]
+                    unroundedI = self.get_I_from_debye(float(debye), eps=float(self.get_eps()[i]))
+                    if unroundedI >= 0.1:
+                        ionic_strength.append(round(unroundedI, 1))
+                        break
+                    else:
+                        ionic_strength.append(round(unroundedI, 3))
+                        break
         return ionic_strength
 
     def get_temperatures(self):
@@ -145,14 +150,19 @@ class LMP:
         Get the temperatures used on the simulation
         :return: ndarray with shape (T) containing temperatures
         """
-        if not self.temper:
-            print("TODO IF NOT TEMPER")
-            return
         T = []
-        for line in self.lmp_file:
-            if "variable T world" in line:
-                T = re.findall(r'\d+\.?\d*', line)
-                break
+        if not self.temper:
+            for lmp_file in self.lmp_files:
+                for line in lmp_file:
+                    if "velocity" in line:
+                        T.append(re.findall(r'\d+', line)[0])
+                        break
+        else:
+            for line in self.lmp_files[0]:
+                if "variable T world" in line:
+                    T = re.findall(r'\d+\.?\d*', line)
+                    break
+        T.sort()
         return np.array(T, dtype=float)
 
     def get_n_chains(self):
@@ -289,6 +299,38 @@ class LMP:
                 scd += sigma_i*sigma_j*np.sqrt(np.abs(total[i]-total[j]))
         return scd/(len(sequence))
 
+    def save_movies(self, frames=100, T=None, center=True):
+        structures = self.structures
+        if T is not None:
+            structures = [self.structures[T]]
+        for T, struct in enumerate(structures):
+            frame_step = int(struct.n_frames/frames) if int(struct.n_frames/frames) != 0 else 1
+            small_struct = struct[::frame_step]
+            small_struct = small_struct[:frames]
+            self.save_lammpstrj(small_struct, fname=(os.path.join(definitions.movie_dir, f'{self.protein}x{self.chains}-T{self.temperatures[T]:.0f}.lammpstrj')), center=center)
+            small_struct.save_xtc(os.path.join(definitions.movie_dir, f'{self.protein}x{self.chains}-T{self.temperatures[T]:.0f}.xtc'))
+            small_struct.save_netcdf(os.path.join(definitions.movie_dir, f'{self.protein}x{self.chains}-T{self.temperatures[T]:.0f}.netcdf'))
+            if os.path.exists(os.path.join(self.o_wd, 'topo.pdb')):
+                shutil.copyfile(os.path.join(self.o_wd, 'topo.pdb'), os.path.join(definitions.movie_dir, f'{self.protein}x{self.chains}-T{self.temperatures[T]:.0f}.pdb'))
+            else:
+                pdb = glob.glob(os.path.join(self.o_wd, '*.pdb'))[0]
+                shutil.copyfile(pdb, os.path.join(definitions.movie_dir, f'{self.protein}x{self.chains}-T{self.temperatures[T]:.0f}.pdb'))
+
+    def save_last_frame(self):
+        for T, struct in enumerate(self.structures):
+            struct[-1].save_pdb(os.path.join(definitions.movie_dir, f'{self.protein}x{self.chains}-T{self.temperatures[T]:.0f}.pdb'))
+
+    def get_box(self):
+        dict = {}
+        for line in self.data_file:
+            if "xlo" and "xhi" in line:
+                dict["x"] = re.findall(r'-?\d+', line)
+            if "ylo" and "yhi" in line:
+                dict["y"] = re.findall(r'-?\d+', line)
+            if "zlo" and "zhi" in line:
+                dict["z"] = re.findall(r'-?\d+', line)
+        return dict
+
     # TODO : MULTICHAIN CASE ?
     def get_seq_from_hps(self):
         """
@@ -325,7 +367,7 @@ class LMP:
         for atom in atoms:
             seq.append(mass_dict[atom[2]])
         seq_str = ''.join(seq)
-        return seq_str
+        return seq_str[:self.chain_atoms]
 
     def run(self, file, n_cores=1):
         """
@@ -361,7 +403,7 @@ class LMP:
                     np.sqrt(2 * 10 ** 3 * cnt.Avogadro) * cnt.e)*(1/debye_wv)*10**-10)
         return sqrtI**2
 
-    def get_structures(self, total_frames=None, every=1):
+    def get_structures(self, total_frames=1000, every=1):
         """
         Get mdtraj objects for every unique trajectory generated by a LAMMPS run
         :param total_frames: int, maximum frames that we wish to load
@@ -381,7 +423,7 @@ class LMP:
                 if total_frames:
                     if int(tr.n_frames/every) < total_frames:
                         every = int(tr.n_frames/total_frames)-1
-                        if every == 0: every = 1
+                        if every <= 0: every = 1
                 tr = tr[self.equil_frames::every]
                 tr = tr[-total_frames:]
             structures.append(tr)
@@ -404,13 +446,11 @@ class LMP:
         # TODO : ! :(
         # print(glob.glob(os.path.join(self.o_wd, '[!_reorder][*.dcd]')))
         # TODO : ! :(
-
         if not self.force_reorder:
             if glob.glob(os.path.join(self.o_wd, '*reorder*.dcd')):
                 files = glob.glob(os.path.join(self.o_wd, '*reorder*.dcd'))
                 files = sorted(files, key=lambda x: int(re.findall(r'\d+', os.path.basename(x))[0]))
                 return files
-
         temp_log = self._get_temper_switches()
         runner, trj_frame_incr = self._get_swap_rates()
 
@@ -436,18 +476,7 @@ class LMP:
         trajs_xyz = np.array(trajs_xyz)
         xyzcop = trajs_xyz.copy()
 
-        # TODO : WHY IS THIS SLOWER ??
-        # if runner != 1:
-        #     print("A")
-        #     trajs_xyz[temp_log[::runner, 1:], :, :] = xyzcop[:, :, :]
-        # else:
-        #     print("B")
-        #     trajs_xyz[temp_log[::trj_frame_incr, 1:], :, :] = xyzcop[:, :, :]
-        # print("WE DONE SWAPPING?")
-        # print(time.time()-ti)
-
         c = 0
-        # TODO: Time consuming... Parallelizable ?
         for i in range(0, temp_log.shape[0], runner):
             if runner != 1:
                 cr = slice(c, c + 1, 1)
@@ -460,17 +489,17 @@ class LMP:
 
         for i, rtrj in enumerate(trajs_xyz):
             trajs[i].xyz = trajs_xyz[i, :, :, :]
-
         xtc_paths = []
         for k in range(len(trajs)):
             dcd = os.path.join(self.o_wd, f'reorder-{k}.dcd')
             xtc_paths.append(os.path.abspath(dcd))
             trajs[k].save_dcd(dcd)
             if save_lammpstrj:
-                self.save_lammpstrj(trajs[k], k)
+                # Time sink is here
+                self.save_lammpstrj(trajs[k], os.path.join(self.o_wd, f'reorder-{k}.lammpstrj'))
         return xtc_paths
 
-    def save_lammpstrj(self, traj, T):
+    def save_lammpstrj(self, traj, fname, center=False):
         """
         Save a trajectory (it's coordinates) in a custom LAMMPS format, since mdtraj seems to do something weird
         :param traj: mdtraj trajectory
@@ -479,21 +508,24 @@ class LMP:
         """
         save_step = int(self.data[0, 1, 0] - self.data[0, 0, 0])
         f = ''
-        frame = 0
-        for t in range(0, save_step*traj.n_frames, save_step):
+        for frame in range(traj.n_frames):
+            frame_center = traj.xyz[frame, :, :].mean(axis=0)
             f += f'ITEM: TIMESTEP \n'
-            f += f'{t} \n'
+            f += f'{frame*save_step} \n'
             f += f'ITEM: NUMBER OF ATOMS \n'
             f += f'{traj.n_atoms} \n'
             f += f'ITEM: BOX BOUNDS pp pp pp \n'
-            for b in range(0, 3):
-                f += f'-{2500:.12e} {2500:.12e} \n'
-            f += f'ITEM: ATOMS id type x y z \n'
-            for i, aa in enumerate(self.sequence):
-                xyz = traj.xyz[frame, i, :]*10
-                f += f'{i+1} {self.residue_dict[aa]["id"]} {xyz[0]:.5f} {xyz[1]:.5f} {xyz[2]:.5f} \n'
-            frame += 1
-        with open(os.path.join(self.o_wd, f'reorder-{T}.lammpstrj'), 'tw') as lmpfile:
+            for key in self.box:
+                f += f'{self.box[key][0]} {self.box[key][1]} \n'
+            f += f'ITEM: ATOMS id type chain x y z \n'
+            for c in range(self.chains):
+                for i, aa in enumerate(self.sequence):
+                    xyz = traj.xyz[frame, i+self.chain_atoms*c, :]*10
+                    xyzf = xyz.copy()
+                    if center:
+                        xyzf = xyzf - frame_center*10
+                    f += f'{(c+1)*(i+1)} {self.residue_dict[aa]["id"]} {c} {xyzf[0]:.5f} {xyzf[1]:.5f} {xyzf[2]:.5f} \n'
+        with open(fname, 'tw') as lmpfile:
             lmpfile.write(f)
 
     def _get_initial_frame(self):
@@ -525,14 +557,17 @@ class LMP:
                 if self.residue_dict[key]["name"] == sig_key:
                     self.residue_dict[key]["sigma"] = definitions.sigmas[sig_key]
 
-    def _get_lmp_file(self):
+    def _get_lmp_files(self):
         """
         Get the content of the main LAMMPS script (lmp.lmp) file
         :return: list[N_lines], list containing all lines of the main .lmp file
         """
-        lmp = glob.glob(os.path.join(self.o_wd, 'lmp.lmp'))[0]
-        with open(os.path.join(self.o_wd, lmp), 'r') as lmp_file:
-            return lmp_file.readlines()
+        lmp = glob.glob(os.path.join(self.o_wd, 'lmp*.lmp'))
+        lmp_files = []
+        for l_file in lmp:
+            with open(os.path.join(self.o_wd, l_file), 'r') as lmp_file:
+                lmp_files.append(lmp_file.readlines())
+        return lmp_files
 
     def _get_data_file(self):
         """
@@ -549,7 +584,7 @@ class LMP:
         the switch rates
         :return: list[T, N_lines], list containing all lines on every log.lammps.T file
         """
-        logs = glob.glob(os.path.join(self.o_wd, 'log.lammps*'))
+        logs = glob.glob(os.path.join(self.o_wd, 'log*.lammps*'))
         if self.temper:
             logs.remove(os.path.join(self.o_wd, 'log.lammps'))
             logs = sorted(logs, key=lambda x: int(re.findall(r'\d+', os.path.basename(x))[0]))
@@ -565,7 +600,7 @@ class LMP:
         :return: bool
         """
         temper = False
-        for line in self.lmp_file:
+        for line in self.lmp_files[0]:
             if "temper" in line:
                 temper = True
                 break
@@ -577,7 +612,7 @@ class LMP:
         :return: bool
         """
         rerun = False
-        for line in self.lmp_file:
+        for line in self.lmp_files[0]:
             if "rerun" in line:
                 rerun = True
                 break

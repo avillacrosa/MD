@@ -1,0 +1,36 @@
+units       real
+dimension   3
+boundary    p p p
+atom_style  full
+
+bond_style  harmonic
+pair_style  ljlambda 0.103 0.0 35.0
+dielectric  80.0
+
+read_restart rst.1
+
+special_bonds fene
+neighbor  3.5 multi
+neigh_modify  every 10 delay 0
+
+comm_style    tiled
+timestep      10.0
+
+velocity      all create 300 494211
+fix           fxnve  all nve
+fix           fxlange all langevin 300 300 50000 451618
+
+compute rg all gyration
+
+thermo        50000
+thermo_style  custom step pe ke temp c_rg
+thermo_modify flush yes
+
+dump          atom_file all atom 50000 atom_traj.lammpstrj
+dump_modify   atom_file flush yes append yes
+
+dump          dcd_file all dcd 50000 dcd_traj.dcd
+dump_modify   dcd_file flush yes unwrap yes
+
+restart 50 rst.1 rst.2
+run           500000

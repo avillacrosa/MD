@@ -1,8 +1,20 @@
-fix           fxslab all deform $deformation_ts x final -$final_slab_volume $final_slab_volume
+unfix fxlange
+fix           fxheat all langevin 300 600 10000 451618
+run 10000
 
-run           $slab_t
+unfix fxheat
+fix           fxlangcont all langevin 600 600 10000 451618
+fix           fxcontract all deform 1 x final -$box_c $box_c y final -$box_c $box_c z final -$box_c $box_c
+run 20000
+
+unfix fxcontract
+unfix fxlangcont
+fix           fxlang all langevin 600 300 10000 451618
+fix           fxslab all deform 1 z final -$final_slab $final_slab
+run $slab_t
 
 unfix fxslab
+unfix fxlang
 
-restart $restart rst.1 rst.2
-run           $t
+fix          finalfxlang all langevin 300 300 10000 451618
+run $t

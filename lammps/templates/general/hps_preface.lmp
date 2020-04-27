@@ -31,7 +31,7 @@ thermo_style  custom step pe ke temp c_rg
 thermo_modify flush yes
 
 dump          atom_file all atom $save $lammps_dump
-dump_modify   atom_file flush yes
+dump_modify   atom_file flush yes scale no
 
 dump          dcd_file all dcd $save $dcd_dump
 dump_modify   dcd_file flush yes unwrap yes

@@ -1,0 +1,187 @@
+CRYST1     2500     2500     2500     90     90     90   
+ATOM      1    G   G     1      243.80  260.00  240.00  1.00  0.00      PROT 
+ATOM      2    S   S     2      247.60  260.00  240.00  1.00  0.00      PROT 
+ATOM      3    M   M     3      251.40  260.00  240.00  1.00  0.00      PROT 
+ATOM      4    T   T     4      255.20  260.00  240.00  1.00  0.00      PROT 
+ATOM      5    P   P     5      259.00  260.00  240.00  1.00  0.00      PROT 
+ATOM      6    S   S     6      262.80  260.00  240.00  1.00  0.00      PROT 
+ATOM      7    T   T     7      266.60  260.00  240.00  1.00  0.00      PROT 
+ATOM      8    P   P     8      270.40  260.00  240.00  1.00  0.00      PROT 
+ATOM      9    P   P     9      274.20  260.00  240.00  1.00  0.00      PROT 
+ATOM     10    R   R    10      278.00  260.00  240.00  1.00  0.00      PROT 
+ATOM     11    S   S    11      281.80  260.00  240.00  1.00  0.00      PROT 
+ATOM     12    R   R    12      285.60  260.00  240.00  1.00  0.00      PROT 
+ATOM     13    G   G    13      289.40  260.00  240.00  1.00  0.00      PROT 
+ATOM     14    T   T    14      293.20  260.00  240.00  1.00  0.00      PROT 
+ATOM     15    R   R    15      297.00  260.00  240.00  1.00  0.00      PROT 
+ATOM     16    Y   Y    16      300.80  260.00  240.00  1.00  0.00      PROT 
+ATOM     17    L   L    17      304.60  260.00  240.00  1.00  0.00      PROT 
+ATOM     18    A   A    18      308.40  260.00  240.00  1.00  0.00      PROT 
+ATOM     19    Q   Q    19      312.20  260.00  240.00  1.00  0.00      PROT 
+ATOM     20    P   P    20      316.00  260.00  240.00  1.00  0.00      PROT 
+ATOM     21    S   S    21      319.80  260.00  240.00  1.00  0.00      PROT 
+ATOM     22    G   G    22      323.60  260.00  240.00  1.00  0.00      PROT 
+ATOM     23    N   N    23      327.40  260.00  240.00  1.00  0.00      PROT 
+ATOM     24    T   T    24      331.20  260.00  240.00  1.00  0.00      PROT 
+ATOM     25    S   S    25      335.00  260.00  240.00  1.00  0.00      PROT 
+ATOM     26    S   S    26      338.80  260.00  240.00  1.00  0.00      PROT 
+ATOM     27    S   S    27      342.60  260.00  240.00  1.00  0.00      PROT 
+ATOM     28    A   A    28      346.40  260.00  240.00  1.00  0.00      PROT 
+ATOM     29    L   L    29      350.20  260.00  240.00  1.00  0.00      PROT 
+ATOM     30    M   M    30      354.00  260.00  240.00  1.00  0.00      PROT 
+ATOM     31    Q   Q    31      357.80  260.00  240.00  1.00  0.00      PROT 
+ATOM     32    G   G    32      361.60  260.00  240.00  1.00  0.00      PROT 
+ATOM     33    Q   Q    33      365.40  260.00  240.00  1.00  0.00      PROT 
+ATOM     34    K   K    34      369.20  260.00  240.00  1.00  0.00      PROT 
+ATOM     35    T   T    35      373.00  260.00  240.00  1.00  0.00      PROT 
+ATOM     36    P   P    36      376.80  260.00  240.00  1.00  0.00      PROT 
+ATOM     37    Q   Q    37      380.60  260.00  240.00  1.00  0.00      PROT 
+ATOM     38    K   K    38      384.40  260.00  240.00  1.00  0.00      PROT 
+ATOM     39    P   P    39      388.20  260.00  240.00  1.00  0.00      PROT 
+ATOM     40    S   S    40      392.00  260.00  240.00  1.00  0.00      PROT 
+ATOM     41    Q   Q    41      395.80  260.00  240.00  1.00  0.00      PROT 
+ATOM     42    N   N    42      399.60  260.00  240.00  1.00  0.00      PROT 
+ATOM     43    L   L    43      403.40  260.00  240.00  1.00  0.00      PROT 
+ATOM     44    V   V    44      407.20  260.00  240.00  1.00  0.00      PROT 
+ATOM     45    P   P    45      411.00  260.00  240.00  1.00  0.00      PROT 
+ATOM     46    V   V    46      414.80  260.00  240.00  1.00  0.00      PROT 
+ATOM     47    T   T    47      418.60  260.00  240.00  1.00  0.00      PROT 
+ATOM     48    P   P    48      422.40  260.00  240.00  1.00  0.00      PROT 
+ATOM     49    S   S    49      426.20  260.00  240.00  1.00  0.00      PROT 
+ATOM     50    T   T    50      430.00  260.00  240.00  1.00  0.00      PROT 
+ATOM     51    T   T    51      433.80  260.00  240.00  1.00  0.00      PROT 
+ATOM     52    K   K    52      437.60  260.00  240.00  1.00  0.00      PROT 
+ATOM     53    S   S    53      441.40  260.00  240.00  1.00  0.00      PROT 
+ATOM     54    F   F    54      445.20  260.00  240.00  1.00  0.00      PROT 
+ATOM     55    K   K    55      449.00  260.00  240.00  1.00  0.00      PROT 
+ATOM     56    N   N    56      452.80  260.00  240.00  1.00  0.00      PROT 
+ATOM     57    A   A    57      456.60  260.00  240.00  1.00  0.00      PROT 
+ATOM     58    P   P    58      460.40  260.00  240.00  1.00  0.00      PROT 
+ATOM     59    L   L    59      464.20  260.00  240.00  1.00  0.00      PROT 
+ATOM     60    L   L    60      468.00  260.00  240.00  1.00  0.00      PROT 
+ATOM     61    A   A    61      471.80  260.00  240.00  1.00  0.00      PROT 
+ATOM     62    P   P    62      475.60  260.00  240.00  1.00  0.00      PROT 
+ATOM     63    P   P    63      479.40  260.00  240.00  1.00  0.00      PROT 
+ATOM     64    N   N    64      483.20  260.00  240.00  1.00  0.00      PROT 
+ATOM     65    S   S    65      487.00  260.00  240.00  1.00  0.00      PROT 
+ATOM     66    N   N    66      490.80  260.00  240.00  1.00  0.00      PROT 
+ATOM     67    M   M    67      494.60  260.00  240.00  1.00  0.00      PROT 
+ATOM     68    G   G    68      498.40  260.00  240.00  1.00  0.00      PROT 
+ATOM     69    M   M    69      502.20  260.00  240.00  1.00  0.00      PROT 
+ATOM     70    T   T    70      506.00  260.00  240.00  1.00  0.00      PROT 
+ATOM     71    S   S    71      509.80  260.00  240.00  1.00  0.00      PROT 
+ATOM     72    P   P    72      513.60  260.00  240.00  1.00  0.00      PROT 
+ATOM     73    F   F    73      517.40  260.00  240.00  1.00  0.00      PROT 
+ATOM     74    N   N    74      521.20  260.00  240.00  1.00  0.00      PROT 
+ATOM     75    G   G    75      525.00  260.00  240.00  1.00  0.00      PROT 
+ATOM     76    L   L    76      528.80  260.00  240.00  1.00  0.00      PROT 
+ATOM     77    T   T    77      532.60  260.00  240.00  1.00  0.00      PROT 
+ATOM     78    S   S    78      536.40  260.00  240.00  1.00  0.00      PROT 
+ATOM     79    P   P    79      540.20  260.00  240.00  1.00  0.00      PROT 
+ATOM     80    Q   Q    80      544.00  260.00  240.00  1.00  0.00      PROT 
+ATOM     81    R   R    81      547.80  260.00  240.00  1.00  0.00      PROT 
+ATOM     82    S   S    82      551.60  260.00  240.00  1.00  0.00      PROT 
+ATOM     83    P   P    83      555.40  260.00  240.00  1.00  0.00      PROT 
+ATOM     84    F   F    84      559.20  260.00  240.00  1.00  0.00      PROT 
+ATOM     85    P   P    85      563.00  260.00  240.00  1.00  0.00      PROT 
+ATOM     86    K   K    86      566.80  260.00  240.00  1.00  0.00      PROT 
+ATOM     87    S   S    87      570.60  260.00  240.00  1.00  0.00      PROT 
+ATOM     88    S   S    88      574.40  260.00  240.00  1.00  0.00      PROT 
+ATOM     89    V   V    89      578.20  260.00  240.00  1.00  0.00      PROT 
+ATOM     90    K   K    90      582.00  260.00  240.00  1.00  0.00      PROT 
+ATOM     91    R   R    91      585.80  260.00  240.00  1.00  0.00      PROT 
+ATOM     92    T   T    92      589.60  260.00  240.00  1.00  0.00      PROT 
+ATOM     93    S   S    93      593.40  260.00  240.00  1.00  0.00      PROT 
+CONECT    1    2 
+CONECT    2    3 
+CONECT    3    4 
+CONECT    4    5 
+CONECT    5    6 
+CONECT    6    7 
+CONECT    7    8 
+CONECT    8    9 
+CONECT    9   10 
+CONECT   10   11 
+CONECT   11   12 
+CONECT   12   13 
+CONECT   13   14 
+CONECT   14   15 
+CONECT   15   16 
+CONECT   16   17 
+CONECT   17   18 
+CONECT   18   19 
+CONECT   19   20 
+CONECT   20   21 
+CONECT   21   22 
+CONECT   22   23 
+CONECT   23   24 
+CONECT   24   25 
+CONECT   25   26 
+CONECT   26   27 
+CONECT   27   28 
+CONECT   28   29 
+CONECT   29   30 
+CONECT   30   31 
+CONECT   31   32 
+CONECT   32   33 
+CONECT   33   34 
+CONECT   34   35 
+CONECT   35   36 
+CONECT   36   37 
+CONECT   37   38 
+CONECT   38   39 
+CONECT   39   40 
+CONECT   40   41 
+CONECT   41   42 
+CONECT   42   43 
+CONECT   43   44 
+CONECT   44   45 
+CONECT   45   46 
+CONECT   46   47 
+CONECT   47   48 
+CONECT   48   49 
+CONECT   49   50 
+CONECT   50   51 
+CONECT   51   52 
+CONECT   52   53 
+CONECT   53   54 
+CONECT   54   55 
+CONECT   55   56 
+CONECT   56   57 
+CONECT   57   58 
+CONECT   58   59 
+CONECT   59   60 
+CONECT   60   61 
+CONECT   61   62 
+CONECT   62   63 
+CONECT   63   64 
+CONECT   64   65 
+CONECT   65   66 
+CONECT   66   67 
+CONECT   67   68 
+CONECT   68   69 
+CONECT   69   70 
+CONECT   70   71 
+CONECT   71   72 
+CONECT   72   73 
+CONECT   73   74 
+CONECT   74   75 
+CONECT   75   76 
+CONECT   76   77 
+CONECT   77   78 
+CONECT   78   79 
+CONECT   79   80 
+CONECT   80   81 
+CONECT   81   82 
+CONECT   82   83 
+CONECT   83   84 
+CONECT   84   85 
+CONECT   85   86 
+CONECT   86   87 
+CONECT   87   88 
+CONECT   88   89 
+CONECT   89   90 
+CONECT   90   91 
+CONECT   91   92 
+CONECT   92   93 
+END 
