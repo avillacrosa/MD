@@ -1,0 +1,120 @@
+REMARK   1 CREATED WITH MDTraj 1.9.3, 2020-04-14
+CRYST1 5000.000 5000.000 5000.000  90.00  90.00  90.00 P 1           1 
+MODEL        0
+ATOM      1  C     C A   1     304.342 150.373 210.285  1.00  0.00      PROTC   
+ATOM      2  F     F A   2     305.266 153.837 208.312  1.00  0.00      PROTF   
+ATOM      3 L      L A   3     302.935 154.029 206.009  1.00  0.00      PROTVS  
+ATOM      4  D     D A   4     300.064 151.314 206.239  1.00  0.00      PROTD   
+ATOM      5 G      G A   5     302.577 148.530 206.289  1.00  0.00      PROTVS  
+ATOM      6  I     I A   6     301.527 145.373 208.276  1.00  0.00      PROTI   
+ATOM      7  D     D A   7     298.707 144.785 210.430  1.00  0.00      PROTD   
+ATOM      8  K     K A   8     295.683 146.420 212.555  1.00  0.00      PROTK   
+ATOM      9 A      A A   9     293.484 144.008 210.189  1.00  0.00      PROTVS  
+ATOM     10 Q      Q A  10     290.371 142.637 208.762  1.00  0.00      PROTVS  
+ATOM     11 E      E A  11     288.408 141.941 205.747  1.00  0.00      PROTVS  
+ATOM     12 E      E A  12     285.933 138.755 206.311  1.00  0.00      PROTVS  
+ATOM     13  H     H A  13     287.363 135.470 206.842  1.00  0.00      PROTH   
+ATOM     14 E      E A  14     289.590 132.904 205.784  1.00  0.00      PROTVS  
+ATOM     15  K     K A  15     290.773 129.418 207.274  1.00  0.00      PROTK   
+ATOM     16  Y     Y A  16     292.748 130.214 210.640  1.00  0.00      PROTY   
+ATOM     17  H     H A  17     292.825 129.549 214.677  1.00  0.00      PROTH   
+ATOM     18  S     S A  18     294.542 131.538 217.513  1.00  0.00      PROTS   
+ATOM     19  N     N A  19     297.264 134.511 218.288  1.00  0.00      PROTN   
+ATOM     20  W     W A  20     297.444 137.898 216.522  1.00  0.00      PROTW   
+ATOM     21 R      R A  21     298.663 141.611 216.718  1.00  0.00      PROTVS  
+ATOM     22 A      A A  22     295.073 143.099 217.420  1.00  0.00      PROTVS  
+ATOM     23 M      M A  23     293.407 144.871 220.451  1.00  0.00      PROTVS  
+ATOM     24 A      A A  24     294.405 147.591 223.160  1.00  0.00      PROTVS  
+ATOM     25  S     S A  25     296.293 150.581 223.138  1.00  0.00      PROTS   
+ATOM     26  D     D A  26     297.628 152.412 220.238  1.00  0.00      PROTD   
+ATOM     27  F     F A  27     301.315 152.089 220.736  1.00  0.00      PROTF   
+ATOM     28  N     N A  28     303.703 149.636 219.540  1.00  0.00      PROTN   
+ATOM     29 L      L A  29     303.427 146.108 221.086  1.00  0.00      PROTVS  
+ATOM     30  P     P A  30     304.275 142.622 222.740  1.00  0.00      PROTP   
+ATOM     31  P     P A  31     305.398 139.990 219.696  1.00  0.00      PROTP   
+ATOM     32  V     V A  32     309.294 140.235 219.300  1.00  0.00      PROTV   
+ATOM     33  V     V A  33     311.318 140.839 222.848  1.00  0.00      PROTV   
+ATOM     34 A      A A  34     314.115 140.334 224.997  1.00  0.00      PROTVS  
+ATOM     35  K     K A  35     313.792 138.541 228.348  1.00  0.00      PROTK   
+ATOM     36 G      G A  36     312.352 135.392 226.782  1.00  0.00      PROTVS  
+ATOM     37  I     I A  37     309.813 135.066 223.803  1.00  0.00      PROTI   
+ATOM     38  V     V A  38     308.308 132.751 226.419  1.00  0.00      PROTV   
+ATOM     39 A      A A  39     311.098 131.161 228.498  1.00  0.00      PROTVS  
+ATOM     40  S     S A  40     313.301 128.198 229.736  1.00  0.00      PROTS   
+ATOM     41  C     C A  41     314.439 126.282 226.452  1.00  0.00      PROTC   
+ATOM     42  D     D A  42     311.638 127.638 224.228  1.00  0.00      PROTD   
+ATOM     43  K     K A  43     313.237 129.787 221.848  1.00  0.00      PROTK   
+ATOM     44  C     C A  44     313.729 131.950 218.615  1.00  0.00      PROTC   
+ATOM     45 Q      Q A  45     315.036 135.843 217.668  1.00  0.00      PROTVS  
+ATOM     46 L      L A  46     317.091 138.990 216.500  1.00  0.00      PROTVS  
+ATOM     47  K     K A  47     315.627 142.138 217.730  1.00  0.00      PROTK   
+ATOM     48 G      G A  48     316.423 145.539 219.223  1.00  0.00      PROTVS  
+ATOM     49 E      E A  49     316.560 148.804 217.763  1.00  0.00      PROTVS  
+ATOM     50 A      A A  50     318.679 150.496 220.726  1.00  0.00      PROTVS  
+ATOM     51 M      M A  51     316.911 149.638 224.188  1.00  0.00      PROTVS  
+ATOM     52  H     H A  52     316.183 152.774 225.436  1.00  0.00      PROTH   
+ATOM     53 G      G A  53     314.572 155.689 227.497  1.00  0.00      PROTVS  
+ATOM     54 Q      Q A  54     313.749 158.881 225.558  1.00  0.00      PROTVS  
+ATOM     55  V     V A  55     317.467 160.133 225.752  1.00  0.00      PROTV   
+ATOM     56  D     D A  56     317.704 160.949 221.923  1.00  0.00      PROTD   
+ATOM     57  C     C A  57     319.638 158.034 220.744  1.00  0.00      PROTC   
+TER      58        C A  57
+ENDMDL
+CONECT    1    2
+CONECT    2    1    3
+CONECT    3    2    4
+CONECT    4    3    5
+CONECT    5    4
+CONECT    6    7
+CONECT    7    6    8
+CONECT    8    7    9
+CONECT    9    8   10
+CONECT   10    9   11
+CONECT   11   10   12
+CONECT   12   11   13
+CONECT   13   12   14
+CONECT   14   13   15
+CONECT   15   14   16
+CONECT   16   15   17
+CONECT   17   16   18
+CONECT   18   17   19
+CONECT   19   18   20
+CONECT   20   19   21
+CONECT   21   20   22
+CONECT   22   21   23
+CONECT   23   22   24
+CONECT   24   23   25
+CONECT   25   24   26
+CONECT   26   25   27
+CONECT   27   26   28
+CONECT   28   27   29
+CONECT   29   28   30
+CONECT   30   29   31
+CONECT   31   30   32
+CONECT   32   31   33
+CONECT   33   32   34
+CONECT   34   33   35
+CONECT   35   34   36
+CONECT   36   35
+CONECT   37   38
+CONECT   38   37   39
+CONECT   39   38   40
+CONECT   40   39   41
+CONECT   41   40   42
+CONECT   42   41   43
+CONECT   43   42   44
+CONECT   44   43   45
+CONECT   45   44   46
+CONECT   46   45   47
+CONECT   47   46   48
+CONECT   48   47   49
+CONECT   49   48   50
+CONECT   50   49   51
+CONECT   51   50   52
+CONECT   52   51   53
+CONECT   53   52   54
+CONECT   54   53   55
+CONECT   55   54   56
+CONECT   56   55   57
+CONECT   57   56
+END
