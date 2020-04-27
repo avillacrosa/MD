@@ -1,0 +1,8 @@
+fix           fxslab all deform $deformation_ts x final -$final_slab_volume $final_slab_volume
+
+run           $slab_t
+
+unfix fxslab
+
+restart $restart rst.1 rst.2
+run           $t
