@@ -1,0 +1,887 @@
+HOOMD-blue 2.5.1 DOUBLE HPMC_MIXED TBB SSE SSE2 SSE3 
+Compiled: 03/15/2019
+Copyright (c) 2009-2019 The Regents of the University of Michigan.
+-----
+You are using HOOMD-blue. Please cite the following:
+* J A Anderson, C D Lorenz, and A Travesset. "General purpose molecular dynamics
+  simulations fully implemented on graphics processing units", Journal of
+  Computational Physics 227 (2008) 5342--5359
+* J Glaser, T D Nguyen, J A Anderson, P Liu, F Spiga, J A Millan, D C Morse, and
+  S C Glotzer. "Strong scaling of general-purpose molecular dynamics simulations
+  on GPUs", Computer Physics Communications 192 (2015) 97--107
+-----
+HOOMD-blue is running on the CPU
+start.py:020  |  hoomd.init.read_snapshot(snap)
+notice(2): Group "all" created containing 448 particles
+start.py:022  |  harmonic = md.bond.harmonic()
+start.py:023  |  harmonic.bond_coeff.set('harmonic', k=400.0, r0=3.8)
+start.py:025  |  nl = md.nlist.cell()
+hoomdsetup.py:029  |          hps_table = md.pair.table(width=len(self.sequence), nlist=nl)
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+hoomdsetup.py:036  |                  hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
+                                         rmin=self.rmin,
+                                         rmax=self.rmax,
+                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+start.py:028  |  hoomd.analyze.log(filename="log-output-b.log",
+                  quantities=['potential_energy', 'temperature'],
+                  period=1000,
+                  overwrite=True)
+start.py:033  |  hoomd.dump.gsd(filename="trajectory.gsd", period=1000, group=hoomd.group.all(), overwrite=True)
+start.py:033  |  hoomd.dump.gsd(filename="trajectory.gsd", period=1000, group=hoomd.group.all(), overwrite=True)
+start.py:034  |  md.integrate.mode_standard(dt=0.005)
+start.py:035  |  hoomd.md.integrate.langevin(group=hoomd.group.all(), kT=1.2, seed=4)
+start.py:035  |  hoomd.md.integrate.langevin(group=hoomd.group.all(), kT=1.2, seed=4)
+notice(2): integrate.langevin/bd is using specified gamma values
+start.py:038  |  hoomd.run(10e2)
+notice(2): -- Neighborlist exclusion statistics -- :
+notice(2): Particles with 1 exclusions             : 2
+notice(2): Particles with 2 exclusions             : 446
+notice(2): Neighbors included by diameter          : no
+notice(2): Neighbors excluded when in the same body: no
+** starting run **
+Time 00:00:02 | Step 1000 / 1000 | TPS 410.73 | ETA 00:00:00
+Average TPS: 410.713
+---------
+-- Neighborlist stats:
+763 normal updates / 10 forced updates / 0 dangerous updates
+n_neigh_min: 0 / n_neigh_max: 59 / n_neigh_avg: 17.1451
+shortest rebuild period: 1
+-- Cell list stats:
+Dimension: 5, 5, 5
+n_min    : 0 / n_max: 38 / n_avg: 3.584
+** run complete **

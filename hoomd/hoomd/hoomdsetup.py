@@ -3,17 +3,16 @@ import hoomd
 from hoomd import md
 import os
 import definitions
+import scipy.constants as cnt
 import mdtraj
 
 
 class HPS():
-    def __init__(self, protein):
+    def __init__(self, protein, **kwargs):
         self.protein = protein
         with open(os.path.join(definitions.hps_data_dir, f'sequences/{protein}.seq')) as f:
             self.sequence = f.readlines()[0]
-        self.particles, self.particle_types = self.get_HPS_particles()
-        self.rmin = 3.8
-        self.rmax=35
+        self.particles, self.particle_types = self._get_HPS_particles()
 
     def HPS_potential(self, r, rmin, rmax, eps, lambd, sigma):
         V = 4 * eps * ((sigma / r) ** 12 - (sigma / r) ** 6)
@@ -25,6 +24,12 @@ class HPS():
             F = lambd * F
         return (V, F)
 
+    def build_spaghetti_pos(self,l):
+        n = len(self.sequence)
+        pos = np.zeros((n, 3))
+        pos[:, 0] = np.linspace(-l / 2 * 0.5, l / 2 * 0.5, n)
+        return pos
+
     def get_HPS_pair_table(self, nl):
         hps_table = md.pair.table(width=len(self.sequence), nlist=nl)
         for i in range(len(self.particle_types)):
@@ -34,29 +39,33 @@ class HPS():
                 lambd = (self.particles[aa_i]["lambda"] + self.particles[aa_j]["lambda"]) / 2
                 sigma = (self.particles[aa_i]["sigma"] + self.particles[aa_j]["sigma"]) / 2
                 hps_table.pair_coeff.set(aa_i, aa_j, func=self.HPS_potential,
-                                         rmin=self.rmin,
-                                         rmax=self.rmax,
-                                         coeff=dict(eps=0.1, lambd=lambd, sigma=sigma))
+                                         rmin=3.8,
+                                         rmax=3*sigma,
+                                         coeff=dict(eps=0.2, lambd=lambd, sigma=sigma))
         return hps_table
 
     def get_pos(self):
         struct = mdtraj.load_pdb(os.path.join(definitions.hps_data_dir, f'equil/{self.protein}.pdb'))
         struct.center_coordinates()
-        return struct.xyz[0, :, :]
+        return struct.xyz[0, :, :]*10.
 
     def build_bonds(self, snap):
         bond_arr = []
         for i, aa in enumerate(self.sequence):
-            snap.particles.typeid[i] = self.particles[aa]["id"]
+            snap.particles.typeid[i] = self.particles[aa]["id"]-1
             bond_arr.append([i, i + 1])
         del bond_arr[-1]
-        snap.bonds.resize(len(self.sequence) - 1);
-        snap.bonds.group[:] = bond_arr[:]
+        snap.bonds.resize(len(self.sequence) - 1)
+        snap.bonds.group[:] = bond_arr
 
     def get_sequence(self):
         return self.sequence
 
-    def get_HPS_particles(self):
+    def temperature_to_kT(self, T):
+        k = cnt.Boltzmann*cnt.Avogadro/4184
+        return k * T
+
+    def _get_HPS_particles(self):
         residues = dict(definitions.residues)
         for key in residues:
             for lam_key in definitions.lambdas:
