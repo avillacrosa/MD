@@ -30,6 +30,17 @@ class HPS():
         pos[:, 0] = np.linspace(-l / 2 * 0.5, l / 2 * 0.5, n)
         return pos
 
+    def get_dipole_pair_table(self, nl):
+        dipole_table = md.pair.dipole(r_cut=35.0, nlist=nl)
+        for i in range(len(self.particle_types)):
+            aa_i = self.particle_types[i]
+            for j in range(i, len(self.particle_types)):
+                aa_j = self.particle_types[j]
+                if self.particles[aa_i]["q"] != 0 and self.particles[aa_j]["q"] != 0:
+                    dipole_table.pair_coeff.set(aa_i, aa_j, mu=0.0, kappa=0.1, A=1.0)
+                else:
+                    dipole_table.pair_coeff.set(aa_i, aa_j, mu=0.0, kappa=100, A=0.0)
+
     def get_HPS_pair_table(self, nl):
         hps_table = md.pair.table(width=len(self.sequence), nlist=nl)
         for i in range(len(self.particle_types)):
@@ -53,6 +64,8 @@ class HPS():
         bond_arr = []
         for i, aa in enumerate(self.sequence):
             snap.particles.typeid[i] = self.particles[aa]["id"]-1
+            if self.particles[aa]["q"] != 0:
+                snap.particles.charge[i] = self.particles[aa]["q"]
             bond_arr.append([i, i + 1])
         del bond_arr[-1]
         snap.bonds.resize(len(self.sequence) - 1)

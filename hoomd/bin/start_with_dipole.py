@@ -21,10 +21,12 @@ hps.build_bonds(snap)
 hoomd.init.read_snapshot(snap)
 
 harmonic = md.bond.harmonic()
-harmonic.bond_coeff.set('harmonic', k=9.6, r0=3.8)
 
 nl = md.nlist.cell()
+
+harmonic.bond_coeff.set('harmonic', k=9.6, r0=3.8)
 hps_table = hps.get_HPS_pair_table(nl)
+dipole_table = hps.get_dipole_pair_table(nl)
 
 hoomd.analyze.log(filename="log.log",
                   quantities=['potential_energy', 'temperature'],
