@@ -21,18 +21,18 @@ from numba import jit
 
 
 class Analysis(lmp.LMP):
-    def __init__(self, max_frames=1000, **kw):
+    def __init__(self, **kwargs):
         """
         Not really a necessary tool, but just a summary of interesting analytical observables for HPS
         :param max_frames: int, how many frames are to be analyzed
         :param kw: kwargs
         """
-        super().__init__(**kw)
+        super().__init__(**kwargs)
 
         self.ijs = None
         self.rgs = None
-        self.max_frames = max_frames
-        self.every_frames = 1
+        self.max_frames = kwargs.get('max_frames', 10000)
+        self.every_frames = kwargs.get('every_frames',1)
         if self.o_wd is not None:
             self.structures = self.get_structures(total_frames=self.max_frames, every=self.every_frames+1)
 
@@ -307,10 +307,10 @@ class Analysis(lmp.LMP):
         rerun.rerun_start = int(og_time + og_save - self.every_frames*self.last_frames*og_save)
         rerun.rerun_stop = og_time
 
-        rerun.box_size = 2500
+        # rerun.box_size = 2500
         rerun.temperatures = [self.get_temperatures()[T]]
         rerun.write_hps_files(rerun=True, data=True, qsub=False, slurm=False, readme=False, rst=False, pdb=False, silent=True)
-        rerun.run(file=os.path.join(temp_dir, 'lmp.lmp'), n_cores=4)
+        rerun.run(file=os.path.join(temp_dir, 'lmp0.lmp'), n_cores=4)
 
         os.system(self.lmp2pdb + ' ' + os.path.join(temp_dir, 'data'))
         r_analysis = Analysis(oliba_wd=temp_dir)
@@ -518,6 +518,7 @@ class Analysis(lmp.LMP):
         :param block_length: int, block size to obtain the errors
         :return:
         """
+        print(observable.shape)
         mean = observable.mean(axis=1)
         errors = []
         for T in range(0, observable.shape[0]):

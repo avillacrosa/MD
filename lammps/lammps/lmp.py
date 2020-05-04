@@ -20,6 +20,7 @@ class LMP:
     """
     def __init__(self, oliba_wd, force_reorder=False, equil_frames=300, silent=False):
         self.o_wd = oliba_wd
+        self.this = os.path.dirname(os.path.dirname(__file__))
 
         self.silent = silent
 
@@ -301,6 +302,8 @@ class LMP:
 
     def save_movies(self, frames=100, T=None, center=True):
         structures = self.structures
+        if frames == 'all':
+            frames = structures[0].n_frames
         if T is not None:
             structures = [self.structures[T]]
         for T, struct in enumerate(structures):
@@ -417,6 +420,7 @@ class LMP:
             if len(dcds) > 1:
                 dcds = sorted(dcds, key=lambda x: int(re.findall(r'\d+', os.path.basename(x))[0]))
         structures = []
+        n_frames = []
         for dcd in dcds:
             tr = md.load(dcd, top=self.topology_path)
             if not self.rerun:
@@ -426,7 +430,12 @@ class LMP:
                         if every <= 0: every = 1
                 tr = tr[self.equil_frames::every]
                 tr = tr[-total_frames:]
+            n_frames.append(tr.n_frames)
             structures.append(tr)
+        minn = np.array(n_frames).min()
+        if not self.temper:
+            for i in range(len(structures)):
+                structures[i] = structures[i][:minn]
         if total_frames is not None and not self.rerun and not self.silent:
             print(f"> Taking frames every {every} for a total of {total_frames} to avoid strong correlations")
             self.last_frames = total_frames

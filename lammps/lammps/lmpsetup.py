@@ -2,7 +2,7 @@ import definitions
 import lmp
 import scipy.constants as cnt
 import numpy as np
-import shutil
+import stat
 import math
 import os
 import mdtraj as md
@@ -34,7 +34,7 @@ class LMPSetup:
         with open(os.path.join(definitions.hps_data_dir, f'sequences/{protein}.seq')) as f:
             self.sequence = f.readlines()[0]
 
-        self.this = os.path.dirname(__file__)
+        self.this = os.path.dirname(os.path.dirname(__file__))
         self.hps_pairs = None
         self.equil_start = equil_start
 
@@ -44,14 +44,14 @@ class LMPSetup:
         self.chains = chains
         self.ionic_strength = kwargs.get('ionic_strength', 100e-3) # In Molar
         self.temperatures = kwargs.get('temperatures', [300, 320, 340, 360, 380, 400])
-        self.box_size = {"x": 2500, "y": 2500, "z": 2500}
+        self.box_size = {"x": 5000, "y": 5000, "z": 5000}
         self.water_perm = kwargs.get('water_perm', 80.)
         self.use_temp_eps = use_temp_eps
         self.v_seed = kwargs.get('v_seed', 494211)
         self.langevin_seed = kwargs.get('langevin_seed', 451618)
         self.save = kwargs.get('save', 50000)
         self.langevin_damp = kwargs.get('langevin_damp', 10000)
-        self.processors = kwargs.get('processors', 12)
+        self.processors = kwargs.get('processors', 4)
         # ------------------------------- #
 
         # ---- LMP PARAMETERS ---- #
@@ -69,7 +69,7 @@ class LMPSetup:
         self.deformation_ts = kwargs.get('deformation_ts', 1)
         # ------------------------- #
 
-        self.use_random = kwargs.get('use_random', False)
+        self.use_random = kwargs.get('use_random', True)
 
         self.xyz = None
         self.protein = protein
@@ -77,7 +77,7 @@ class LMPSetup:
         self.residue_dict = dict(definitions.residues)
         self.key_ordering = list(self.residue_dict.keys())
 
-        self.debye_wv = None
+        self.debye_wv = kwargs.get('debye', None)
         self.swap_every = 1000
 
         self.avg_sigma = 0
@@ -153,7 +153,6 @@ class LMPSetup:
         meta_maker.temperatures = [300]
         meta_maker.write_hps_files(equil=True, qsub=False, silent=True)
         meta_maker.run('lmp.lmp', n_cores=8)
-        print(os.getcwd())
         traj = md.load(os.path.join(self.this, 'temp/dcd_traj.dcd'), top=os.path.join(self.this, 'temp/topo.pdb'))
         self.xyz = traj[-1].xyz * 10
         mx = np.abs(self.xyz).max()
@@ -173,6 +172,9 @@ class LMPSetup:
         :param padding: float, how close we want the copies in the multichain case
         :return: Nothing
         """
+        if self.xyz is not None:
+            return self.xyz
+
         if pdb is not None:
             struct = md.load_pdb(pdb)
         else:
@@ -242,7 +244,6 @@ class LMPSetup:
                         struct.xyz[0, :, :] = struct.xyz[0, :, :] - dist
                         chain += 1
                         centers_save.append(dist)
-                        print(f"{chain}/{self.chains}", end='\r')
                 return adder
 
             if self.use_random:
@@ -337,7 +338,6 @@ class LMPSetup:
                 epsilon = self._eps(T)
             else:
                 epsilon = self.water_perm
-            print(epsilon)
             l = np.sqrt(cnt.epsilon_0 * epsilon * cnt.Boltzmann * T)
         l = l / (np.sqrt(2 * self.ionic_strength * 10 ** 3 * cnt.Avogadro) * cnt.e)
         return l
@@ -455,7 +455,6 @@ class LMPSetup:
         """
         if self.equil_start:
             self.get_pdb_xyz()
-
         if self.temper:
             self.processors = len(self.temperatures)
 
@@ -512,6 +511,10 @@ class LMPSetup:
                 qsub_subst = qsub_template.safe_substitute(self.qsub_file_dict)
                 with open(os.path.join(output_path, f'{self.job_name}_{T_str}.qsub'), 'tw') as fileout:
                     fileout.write(qsub_subst)
+                with open(os.path.join(output_path, f'run.sh'), 'a+') as runner:
+                    runner.write(f'qsub {self.job_name}_{T_str}.qsub \n')
+                st = os.stat(os.path.join(output_path, f'run.sh'))
+                os.chmod(os.path.join(output_path, f'run.sh'), st.st_mode | stat.S_IEXEC)
             if slurm:
                 slurm_temp_file = open(os.path.join(self.this, 'templates/slurm_template.slm'))
                 slurm_template = Template(slurm_temp_file.read())
@@ -573,10 +576,16 @@ class LMPSetup:
         self.get_hps_pairs(T)
         if self.model == 'gHPS':
             self.lmp_file_dict["pair_potential"] = 'lj/cut/coul/debye'
-            self.lmp_file_dict["pair_parameters"] = f"{round(1 / self.debye_length(T) * 10 ** -10, 3)} 0.0"
+            if self.debye_wv:
+                self.lmp_file_dict["pair_parameters"] = f"{self.debye_wv} 0.0"
+            else:
+                self.lmp_file_dict["pair_parameters"] = f"{round(1 / self.debye_length(T) * 10 ** -10, 3)} 0.0"
         else:
             self.lmp_file_dict["pair_potential"] = 'ljlambda'
-            self.lmp_file_dict["pair_parameters"] = f"{round(1 / self.debye_length(T, ) * 10 ** -10, 3)} 0.0 35.0"
+            if self.debye_wv:
+                self.lmp_file_dict["pair_parameters"] = f"{self.debye_wv} 0.0 35.0"
+            else:
+                self.lmp_file_dict["pair_parameters"] = f"{round(1 / self.debye_length(T, ) * 10 ** -10, 3)} 0.0 35.0"
 
         if T is None:
             dcd_dump = f"dcd_traj.dcd"
@@ -617,8 +626,8 @@ class LMPSetup:
         self.lmp_file_dict["rerun_dump"] = self.rerun_dump
         self.lmp_file_dict["langevin_damp"] = self.langevin_damp
         self.lmp_file_dict["deformation_ts"] = self.deformation_ts
-        self.lmp_file_dict["final_slab"] = round(self.box_size["x"], 2)
-        self.lmp_file_dict["box_c"] = round(self.box_size["x"]/6, 2)
+        self.lmp_file_dict["final_slab"] = round(self.box_size["x"]/2, 2)
+        self.lmp_file_dict["box_c"] = round(self.box_size["x"]/8, 2)
 
         self.lmp_file_dict["lammps_dump"] = lammps_dump
         self.lmp_file_dict["dcd_dump"] = dcd_dump

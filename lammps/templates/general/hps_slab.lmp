@@ -1,5 +1,6 @@
+
 unfix fxlange
-fix           fxheat all langevin 300 600 10000 451618
+fix           fxheat all langevin $temp 600 10000 451618
 run 10000
 
 unfix fxheat
@@ -9,12 +10,12 @@ run 20000
 
 unfix fxcontract
 unfix fxlangcont
-fix           fxlang all langevin 600 300 10000 451618
-fix           fxslab all deform 1 z final -$final_slab $final_slab
+fix           fxlang all langevin 600 $temp 10000 451618
+fix           fxslab all deform 1 z final -$final_slab $final_slab remap none
 run $slab_t
 
 unfix fxslab
 unfix fxlang
 
-fix          finalfxlang all langevin 300 300 10000 451618
+fix          finalfxlang all langevin $temp $temp 10000 451618
 run $t

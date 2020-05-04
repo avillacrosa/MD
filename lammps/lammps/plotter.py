@@ -14,12 +14,12 @@ import matplotlib.pyplot as plt
 
 
 class Plotter(analysis.Analysis):
-    def __init__(self, data_dir=None, force_recalc=False, max_frames=1000):
+    def __init__(self, data_dir=None, force_recalc=False, **kwargs):
         """
         Just a helper for plotting. Many things (paths and what not) are really arbitrary.
         :param force_recalc: bool, Useless atm
         """
-        super().__init__(oliba_wd=None, max_frames=max_frames)
+        super().__init__(oliba_wd=None, **kwargs)
         self.oliba_prod_dir = data_dir if data_dir is not None else '/home/adria/data/prod/lammps'
         self.index = self.make_index()
 
@@ -34,7 +34,6 @@ class Plotter(analysis.Analysis):
         self.title_fsize = 20
         self.label_fsize = 16
         self.ticks_fsize = 14
-        self.this = os.path.dirname(__file__)
         # TODO HARD CODED...
         self.temperatures = None
 
@@ -198,7 +197,7 @@ class Plotter(analysis.Analysis):
         if observable == 'charge':
             data = self.plot_q_distr(**kwargs)
         if observable == 'rg_distr':
-            data = self.plot_rg_distr(T=6, **kwargs)
+            data = self.plot_rg_distr(**kwargs)
         if observable == 'clusters':
             data = self.plot_clusters(**kwargs)
         if observable == 'rho':
@@ -402,6 +401,7 @@ class Plotter(analysis.Analysis):
         """
         bins = kwargs["bins"] if "bins" in kwargs else 'auto'
         alpha = kwargs["alpha"] if "alpha" in kwargs else 0.5
+        T = kwargs.get("T", 2)
         rg = self.rg(use='md')[T, :]
 
         kde_scipy = scipy.stats.gaussian_kde(rg)
@@ -412,7 +412,7 @@ class Plotter(analysis.Analysis):
         self.axis.hist(rg, bins=bins, alpha=alpha, density=True, label=self.label, color=p[0].get_color())
         self.axis.set_ylabel("P(Rg)", fontsize=self.label_fsize)
         self.axis.set_xlabel("Rg", fontsize=self.label_fsize)
-        self.axis.set_xlim(0, 200)
+        self.axis.set_xlim(22, 35)
         return rg
 
     def plot_distance_between_chains(self, **kwargs):
@@ -538,13 +538,6 @@ class Plotter(analysis.Analysis):
             self.axis.hist(E[T], density=True, label=f'T = {self.temperatures[T]:.0f}', bins=80)
             self.axis.plot(x, kde_scipy(x))
         self.axis.legend()
-
-    def clean(self, plot_id):
-        if plot_id in self.plots:
-            del self.plots[plot_id]
-
-    def display(self, plot_id):
-        return self.plots[plot_id][0]
 
     # TODO !!!! Still need to be translated, but they are pretty niche atm !!!!
     def plot_aa_map(dir, seq, ref_dir=None):
