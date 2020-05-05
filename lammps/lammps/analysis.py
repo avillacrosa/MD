@@ -32,7 +32,7 @@ class Analysis(lmp.LMP):
         self.ijs = None
         self.rgs = None
         self.max_frames = kwargs.get('max_frames', 10000)
-        self.every_frames = kwargs.get('every_frames',1)
+        self.every_frames = kwargs.get('every_frames', 1)
         if self.o_wd is not None:
             self.structures = self.get_structures(total_frames=self.max_frames, every=self.every_frames+1)
 
@@ -324,7 +324,7 @@ class Analysis(lmp.LMP):
         rew_rg = np.dot(weights, self.rg()[T, :])
         return rrg.mean(), lmprg, rew_rg, n_eff
 
-    def minimize(self, a_dir, b_dir, T, method='sto', temp_dir='/home/adria/OPT',
+    def maximize_charge(self, a_dir, b_dir, T, method='sto', temp_dir='/home/adria/OPT',
                  I0=None, l0=None, eps0=None, savefile='stomin.txt', weight_cost_mean=1):
         """
         Optimize the radius of gyration difference between 2 independent LAMMPS run. The cost function is essentially
@@ -367,24 +367,27 @@ class Analysis(lmp.LMP):
             protein = protein_object.protein
 
             shutil.copyfile(os.path.join(data_dir, 'data.data'), os.path.join(temp_dir, f'data.data'))
-            shutil.copyfile(os.path.join(data_dir, f'reorder-{T}.lammpstrj'), os.path.join(temp_dir, f'atom_traj_{protein}.lammpstrj'))
+            shutil.copyfile(os.path.join(data_dir, f'atom_traj_{T}.lammpstrj'), os.path.join(temp_dir, f'atom_traj_{protein}.lammpstrj'))
 
             rerun = lmpsetup.LMPSetup(oliba_wd=temp_dir, protein=protein, temper=False, equil_start=False)
             rerun.ionic_strength = I
             rerun.water_perm = eps
             rerun.hps_scale = ls
             rerun.save = og_save
+            rerun.temperatures = [above_tc.temperatures[T]]
             rerun.rerun_dump = f'atom_traj_{protein}.lammpstrj'
             rerun.rerun_skip = int(protein_object.every_frames)
             rerun.rerun_start = int(og_time + og_save - protein_object.every_frames*protein_object.last_frames*og_save)
             rerun.rerun_stop = og_time
             rerun.temperature = protein_object.get_temperatures()[T]
+            # TODO : Remove hardcoding
+            rerun.box_size = {"x": 5000, "y": 5000, "z": 5000}
             rerun.write_hps_files(rerun=True, data=False, qsub=False, slurm=False, readme=False, rst=False)
-            rerun.run(file=os.path.join(rerun.out_dir, 'lmp.lmp'), n_cores=1)
+            rerun.run(file=os.path.join(temp_dir, 'lmp0.lmp'), n_cores=1)
 
             rerun_analysis = Analysis(oliba_wd=temp_dir)
             Ef = rerun_analysis.data[0, :, 1]
-
+            print(Ei.shape, Ef.shape)
             weights = rerun_analysis.weights(Ei=Ei, Ef=Ef, T=protein_object.get_temperatures()[T])
             weights = weights/np.sum(weights)
             n_eff = self.n_eff(weights)

@@ -2,11 +2,11 @@ import hoomdsetup
 import hoomd
 from hoomd import md
 
-
+temperature = "300.0 318.18 336.36 354.55 372.73 390.91 409.09 427.27 445.45 463.64 481.82 500.0"
 l = 400
-temperature = 300
 
 hps = hoomdsetup.HPS(protein='CPEB4')
+
 hoomd.context.initialize("")
 box = hoomd.data.boxdim(Lx=l, Ly=l, Lz=l)
 snap = hoomd.data.make_snapshot(N=len(hps.sequence),
@@ -32,7 +32,7 @@ hoomd.analyze.log(filename="log.log",
                   quantities=['potential_energy', 'temperature'],
                   period=5000,
                   overwrite=True)
-hoomd.dump.gsd(filename="trajectory.gsd", period=5000, group=hoomd.group.all(), overwrite=True)
+hoomd.dump.gsd(filename=f"trajectory_{temperature}.gsd", period=5000, group=hoomd.group.all(), overwrite=True)
 hoomd.dump.dcd(filename="trajectory.dcd", period=5000, group=hoomd.group.all(), overwrite=True)
 md.integrate.mode_standard(dt=0.005)
 

@@ -421,6 +421,8 @@ class LMPSetup:
                 l = aa["lambda"] + 11.795 - 0.067679*temp + 0.000094114*temp**2
             if aa["type"].lower() == "charged":
                 l = aa["lambda"] + 9.6614 - 0.054260*temp + 0.000073126*temp**2
+            else:
+                raise SystemError("We shouldn't be here...")
             return l
 
         for key in self.residue_dict:

@@ -18,7 +18,7 @@ class LMP:
     LMP is a base class to translate parameters of a finished or running LAMMPS run to python.
     It can also perform some basic transformations like reorder a replica exchange
     """
-    def __init__(self, oliba_wd, force_reorder=False, equil_frames=300, silent=False):
+    def __init__(self, oliba_wd, force_reorder=False, equil_frames=300, silent=False, **kwargs):
         self.o_wd = oliba_wd
         self.this = os.path.dirname(os.path.dirname(__file__))
 
