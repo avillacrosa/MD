@@ -240,13 +240,13 @@ def _run_pulchra(t):
     import mdtraj as md
     import os
     i, frame = t
-    name = '/dev/shm/ramon/input-p-{}.pdb'.format(i)
+    name = '/dev/shm/yihsuan/input-p-{}.pdb'.format(i)
     frame.save(name)
     # call pulchra
     call_line = '/lindorffgrp-isilon/wyong/CACBGo_TIM910GGC/RUN/SAXStools/pulchra304/bin/linux/pulchra {}'.format(name)
     call_line = call_line.split()
     run(call_line)
-    outname = '/dev/shm/ramon/input-p-{}.rebuilt.pdb'.format(i)
+    outname = '/dev/shm/yihsuan/input-p-{}.rebuilt.pdb'.format(i)
     trajtemp = md.load(outname)
     os.remove(name)
     os.remove(outname)
@@ -275,7 +275,7 @@ def reconstruct_pulchra(name, n_procs=8):
     trajin = trajin.superpose(trajin, frame=0)
 
     try:
-        os.mkdir('/dev/shm/ramon')
+        os.mkdir('/dev/shm/yihsuan')
     except FileExistsError:
         pass
     print("Starting reconstruction of {} frames".format(trajin.n_frames))

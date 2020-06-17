@@ -18,7 +18,7 @@ class LMPSetup:
     LMPSetup serves as a way to create easily LAMMPS input files (.lmp) as well as LAMMPS topology files (.data)
     """
     # TODO : Allow to pass parameters as kwargs
-    def __init__(self, oliba_wd, protein, temper, chains=1, equil_start=True, model='HPS', slab=False, use_temp_eps=False, **kwargs):
+    def __init__(self, oliba_wd, protein, temper=False, chains=1, equil_start=True, model='HPS', slab=False, use_temp_eps=False, **kwargs):
         """
         :param oliba_wd: string, path where our run is
         :param protein: string, protein of choice. Its sequence must exist in ../data/sequences/{protein}.seq
@@ -44,14 +44,15 @@ class LMPSetup:
         self.chains = chains
         self.ionic_strength = kwargs.get('ionic_strength', 100e-3) # In Molar
         self.temperatures = kwargs.get('temperatures', [300, 320, 340, 360, 380, 400])
-        self.box_size = {"x": 5000, "y": 5000, "z": 5000}
+        self.box_size = {"x": 500, "y": 500, "z": 500}
         self.water_perm = kwargs.get('water_perm', 80.)
         self.use_temp_eps = use_temp_eps
         self.v_seed = kwargs.get('v_seed', 494211)
         self.langevin_seed = kwargs.get('langevin_seed', 451618)
         self.save = kwargs.get('save', 50000)
         self.langevin_damp = kwargs.get('langevin_damp', 10000)
-        self.processors = kwargs.get('processors', 4)
+        self.processors = kwargs.get('processors', 1)
+        self.charge_scale = kwargs.get('charge_scale', 1)
         # ------------------------------- #
 
         # ---- LMP PARAMETERS ---- #
@@ -64,12 +65,19 @@ class LMPSetup:
         # ------------------------- #
 
         # ---- SLAB PARAMETERS ---- #
-        self.slab_t = kwargs.get('slab_t', 100000)
+        self.slab_t = kwargs.get('slab_t', 200000)
+        # self.final_slab_volume = self.box_size["x"]/4
+        self.slab_dimensions = {}
+        droplet_zlength = 500
+        self.slab_dimensions["x"] = (self.chains*4*math.pi/3/droplet_zlength*self.rw_rg()**3)**0.5
+        self.slab_dimensions["y"] = (self.chains*4*math.pi/3/droplet_zlength*self.rw_rg()**3)**0.5
+        self.slab_dimensions["z"] = 5*droplet_zlength
+
         self.final_slab_volume = self.box_size["x"]/4
         self.deformation_ts = kwargs.get('deformation_ts', 1)
         # ------------------------- #
 
-        self.use_random = kwargs.get('use_random', True)
+        self.use_random = kwargs.get('use_random', False)
 
         self.xyz = None
         self.protein = protein
@@ -163,7 +171,7 @@ class LMPSetup:
         print(f"-> Saving equilibration pdb at {os.path.join(definitions.hps_data_dir, f'equil/{self.protein}.pdb')}")
         traj[-1].save_pdb(os.path.join(definitions.hps_data_dir, f'equil/{self.protein}.pdb'))
 
-    def get_pdb_xyz(self, pdb=None, padding=0.55, use_random=False):
+    def get_pdb_xyz(self, pdb=None, padding=0.8):
         """
         Get the xyz of a pdb. If we're demanding more than 1 chain, then generate xyz for every other chain
         so that they are in a cubic setup using the xyz from the single case.
@@ -182,31 +190,25 @@ class LMPSetup:
                 self.make_equilibration_traj()
             struct = md.load_pdb(os.path.join(definitions.hps_data_dir, f'equil/{self.protein}.pdb'))
         struct.center_coordinates()
-        rg = md.compute_rg(struct)
-        d = rg[0] * self.chains ** (1 / 3) * 8
+        struct.xyz = struct.xyz*10.
+        d = 4.0 * self.rw_rg(monomer_l=5.5) * (self.chains * 4 * math.pi / 3) ** (1 / 3)
         struct.unitcell_lengths = np.array([[d, d, d]])
 
-        if self.chains == 1:
-            self.xyz = struct.xyz * 10
-            self.box_size["x"] = d * 10
-            self.box_size["y"] = d * 10
-            self.box_size["z"] = d * 10
-        else:
-            # TEST
-
+        self.xyz = struct.xyz
+        if self.chains > 1:
             def _build_cubic_box():
                 c = 0
                 n_cells = int(math.ceil(self.chains ** (1 / 3)))
-                unitcell_d = d / n_cells
+                u_d = d / n_cells
                 for z in range(n_cells):
                     for y in range(n_cells):
                         for x in range(n_cells):
                             if c == self.chains:
                                 return adder
                             c += 1
-                            dist = np.array(
-                                [unitcell_d * (x + 1 / 2), unitcell_d * (y + 1 / 2), unitcell_d * (z + 1 / 2)])
-                            dist -= padding * (dist - d / 2)
+                            dist = np.array([u_d * (x + 1/2), u_d * (y + 1/2), u_d * (z + 1/2)])
+                            dist -= d / 2
+                            dist *= padding
 
                             struct.xyz[0, :, :] = struct.xyz[0, :, :] + dist
                             if x + y + z == 0:
@@ -219,14 +221,16 @@ class LMPSetup:
             def build_random():
                 adder = struct[:]
                 dist = np.random.uniform(-d/2, d/2, 3)
-                dist -= 0.2 * (dist)
+                # dist = dist - 0.6 * (dist-d/2)
                 adder.xyz[0, :, :] += dist
                 chain = 1
                 centers_save = [dist]
+                rg_ext = self.rw_rg()
 
                 def find_used(dist_d, centers_save_d):
                     for i, center in enumerate(centers_save_d):
-                        if np.linalg.norm(dist_d - center) < 9:
+                        # Dynamic Rg scale based on equilibration Rg ?
+                        if np.linalg.norm(dist_d - center) < rg_ext*3.0:
                             return True
                         else:
                             continue
@@ -235,6 +239,7 @@ class LMPSetup:
                 while chain < self.chains:
                     # TODO : move to gaussian ? Uniform is not uniform in 3d ?
                     dist = np.random.uniform(-d/2, d/2, 3)
+                    # TODO: REMOVE THIS QUICK DIRTY TRICK
                     dist -= 0.2 * (dist)
 
                     used = find_used(dist, centers_save)
@@ -250,10 +255,10 @@ class LMPSetup:
                 system = build_random()
             else:
                 system = _build_cubic_box()
-            self.box_size["x"] = d * 10
-            self.box_size["y"] = d * 10
-            self.box_size["z"] = d * 10
-            self.xyz = system.xyz * 10
+            self.xyz = system.xyz
+        self.box_size["x"] = d
+        self.box_size["y"] = d
+        self.box_size["z"] = d
 
     def run(self, file, n_cores=1):
         """
@@ -354,7 +359,8 @@ class LMPSetup:
         else:
             temperature_params = None
         self._get_hps_params(temp=temperature_params)
-        if self.model != 'gHPS':
+        # if self.model != 'gHPS' or self.model != 'gHPS-T':
+        if self.model == 'HPS' or self.model == 'HPS-T':
             lines = ['pair_coeff          *       *       0.000000   0.000    0.000000   0.000   0.000\n']
         else:
             lines = ['pair_coeff          *       *       0.000000   0.000    0.0000   0.000\n']
@@ -376,9 +382,10 @@ class LMPSetup:
                 else:
                     cutoff = 0.0
                 lambda_ij = lambda_ij * self.hps_scale
-                if self.model == 'gHPS':
+                if self.model == 'gHPS' or self.model=='gHPS-T':
                     C6 = -4*self.hps_epsilon*sigma_ij**6*(1+self.a6*(lambda_ij-1))
                     C12 = 4*self.hps_epsilon*sigma_ij**12*(1+(1-self.a6)*(lambda_ij-1))
+                    print(-C12/C6 < 0, 1+self.a6*(lambda_ij-1))
                     new_sigma = (-C12/C6)**(1/6)
                     new_eps = 0.25*C6**2/C12
                     line = 'pair_coeff         {:2d}      {:2d}       {:.6f}   {:.3f}    {:6.3f}  {:6.3f}\n'.format(
@@ -413,23 +420,24 @@ class LMPSetup:
             l = 0
             if aa["type"].lower() == "hydrophobic":
                 l = aa["lambda"] - 25.475 + 0.14537*temp - 0.00020059*temp**2
-            if aa["type"].lower() == "aromatic":
+            elif aa["type"].lower() == "aromatic":
                 l = aa["lambda"] - 26.189 + 0.15034*temp - 0.00020920*temp**2
-            if aa["type"].lower() == "other":
+            elif aa["type"].lower() == "other":
                 l = aa["lambda"] + 2.4580 - 0.014330*temp + 0.000020374*temp**2
-            if aa["type"].lower() == "polar":
+            elif aa["type"].lower() == "polar":
                 l = aa["lambda"] + 11.795 - 0.067679*temp + 0.000094114*temp**2
-            if aa["type"].lower() == "charged":
+            elif aa["type"].lower() == "charged":
                 l = aa["lambda"] + 9.6614 - 0.054260*temp + 0.000073126*temp**2
             else:
-                raise SystemError("We shouldn't be here...")
+                t = aa["type"]
+                raise SystemError(f"We shouldn't be here...{t}")
             return l
 
         for key in self.residue_dict:
             for lam_key in definitions.lambdas:
                 if self.residue_dict[key]["name"] == lam_key:
                     self.residue_dict[key]["lambda"] = definitions.lambdas[lam_key]
-                    if self.model.upper() == 'HPS-T':
+                    if self.model.upper() == 'HPS-T' or self.model.upper() == 'GHPS-T':
                         self.residue_dict[key]["lambda"] = convert_to_HPST(self.residue_dict[key])
 
             for sig_key in definitions.sigmas:
@@ -513,8 +521,14 @@ class LMPSetup:
                 qsub_subst = qsub_template.safe_substitute(self.qsub_file_dict)
                 with open(os.path.join(output_path, f'{self.job_name}_{T_str}.qsub'), 'tw') as fileout:
                     fileout.write(qsub_subst)
-                with open(os.path.join(output_path, f'run.sh'), 'a+') as runner:
-                    runner.write(f'qsub {self.job_name}_{T_str}.qsub \n')
+                run_free = True
+                if os.path.exists(os.path.join(output_path, f'run.sh')):
+                    with open(os.path.join(output_path, f'run.sh'), 'r') as runner:
+                        if f'qsub {self.job_name}_{T_str}.qsub \n' in runner.readlines():
+                            run_free = False
+                if run_free:
+                    with open(os.path.join(output_path, f'run.sh'), 'a+') as runner:
+                        runner.write(f'qsub {self.job_name}_{T_str}.qsub \n')
                 st = os.stat(os.path.join(output_path, f'run.sh'))
                 os.chmod(os.path.join(output_path, f'run.sh'), st.st_mode | stat.S_IEXEC)
             if slurm:
@@ -523,6 +537,16 @@ class LMPSetup:
                 slurm_subst = slurm_template.safe_substitute(self.slurm_file_dict)
                 with open(os.path.join(output_path, f'{self.job_name}_{T_str}.slm'), 'tw') as fileout:
                     fileout.write(slurm_subst)
+                run_free = True
+                if os.path.exists(os.path.join(output_path, f'run.sh')):
+                    with open(os.path.join(output_path, f'run.sh'), 'r') as runner:
+                        if f'sbatch {self.job_name}_{T_str}.slm \n' in runner.readlines():
+                            run_free = False
+                if run_free:
+                    with open(os.path.join(output_path, f'run.sh'), 'a+') as runner:
+                        runner.write(f'sbatch {self.job_name}_{T_str}.slm \n')
+                st = os.stat(os.path.join(output_path, f'run.sh'))
+                os.chmod(os.path.join(output_path, f'run.sh'), st.st_mode | stat.S_IEXEC)
             if lmp:
                 with open(os.path.join(output_path, f'lmp{T_str}.lmp'), 'tw') as fileout:
                     fileout.write(lmp_subst)
@@ -532,6 +556,10 @@ class LMPSetup:
             # rst_subst = rst_template.safe_substitute(self.lmp_file_dict)
             #     with open(os.path.join(output_path, f'rst{T_str}.lmp'), 'tw') as fileout:
             #         fileout.write(rst_subst)
+
+    def rw_rg(self, monomer_l=5.5):
+        rg = monomer_l*(len(self.sequence)/6)**0.5
+        return rg
 
     # TODO : THIS ONLY IF WE HAVE self.xyz... Maybe I can make it general
     # TODO : ALSO THIS IS NOT CENTERED FOR SINGLE CHAIN!!!!
@@ -576,7 +604,7 @@ class LMPSetup:
         :return: Nothing
         """
         self.get_hps_pairs(T)
-        if self.model == 'gHPS':
+        if self.model == 'gHPS' or self.model=='gHPS-T':
             self.lmp_file_dict["pair_potential"] = 'lj/cut/coul/debye'
             if self.debye_wv:
                 self.lmp_file_dict["pair_parameters"] = f"{self.debye_wv} 0.0"
@@ -628,8 +656,10 @@ class LMPSetup:
         self.lmp_file_dict["rerun_dump"] = self.rerun_dump
         self.lmp_file_dict["langevin_damp"] = self.langevin_damp
         self.lmp_file_dict["deformation_ts"] = self.deformation_ts
-        self.lmp_file_dict["final_slab"] = round(self.box_size["x"]/2, 2)
-        self.lmp_file_dict["box_c"] = round(self.box_size["x"]/8, 2)
+
+        self.lmp_file_dict["final_slab_x"] = round(self.slab_dimensions["x"]/2, 2)
+        self.lmp_file_dict["final_slab_y"] = round(self.slab_dimensions["y"]/2, 2)
+        self.lmp_file_dict["final_slab_z"] = round(self.slab_dimensions["z"]/2, 2)
 
         self.lmp_file_dict["lammps_dump"] = lammps_dump
         self.lmp_file_dict["dcd_dump"] = dcd_dump
@@ -667,7 +697,7 @@ class LMPSetup:
                     xyz = self.xyz[0, k - 1, :]
                 atoms.append(f'      {k :3d}          {chain}    '
                              f'      {self.residue_dict[aa]["id"]:2d}   '
-                             f'    {self.residue_dict[aa]["q"]: .2f}'
+                             f'    {self.residue_dict[aa]["q"]*self.charge_scale: .2f}'
                              f'    {xyz[0]: .3f}'
                              f'    {xyz[1]: .3f}'
                              f'    {xyz[2]: .3f} \n')

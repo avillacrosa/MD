@@ -35,6 +35,7 @@ class LMP:
             self.data_file = self._get_data_file()
             self.lmp_files = self._get_lmp_files()
             self.temper = self._is_temper()
+            self.slab = self._is_slab()
             self.rerun = self._is_rerun()
             self.log_files = self._get_log_files()
             self.topology_path = self._get_initial_frame()
@@ -47,6 +48,14 @@ class LMP:
             self.structures = None
             self.equil_frames = equil_frames
             self.temperatures = self.get_temperatures()
+            self.masses = self._get_masses()
+
+    def _get_masses(self):
+        m = []
+        for chain in range(self.chains):
+            for aa in self.sequence:
+                m.append(self.residue_dict[aa]["mass"])
+        return np.array(m)
 
     def get_lmp_dirs(self, path=None):
         """
@@ -165,6 +174,13 @@ class LMP:
                     break
         T.sort()
         return np.array(T, dtype=float)
+
+    def _is_slab(self):
+        for file in self.lmp_files:
+            for line in file:
+                if "deform" in line:
+                    return True
+        return False
 
     def get_n_chains(self):
         """
@@ -310,28 +326,39 @@ class LMP:
             frame_step = int(struct.n_frames/frames) if int(struct.n_frames/frames) != 0 else 1
             small_struct = struct[::frame_step]
             small_struct = small_struct[:frames]
-            self.save_lammpstrj(small_struct, fname=(os.path.join(definitions.movie_dir, f'{self.protein}x{self.chains}-T{self.temperatures[T]:.0f}.lammpstrj')), center=center)
-            small_struct.save_xtc(os.path.join(definitions.movie_dir, f'{self.protein}x{self.chains}-T{self.temperatures[T]:.0f}.xtc'))
-            small_struct.save_netcdf(os.path.join(definitions.movie_dir, f'{self.protein}x{self.chains}-T{self.temperatures[T]:.0f}.netcdf'))
-            if os.path.exists(os.path.join(self.o_wd, 'topo.pdb')):
-                shutil.copyfile(os.path.join(self.o_wd, 'topo.pdb'), os.path.join(definitions.movie_dir, f'{self.protein}x{self.chains}-T{self.temperatures[T]:.0f}.pdb'))
-            else:
-                pdb = glob.glob(os.path.join(self.o_wd, '*.pdb'))[0]
-                shutil.copyfile(pdb, os.path.join(definitions.movie_dir, f'{self.protein}x{self.chains}-T{self.temperatures[T]:.0f}.pdb'))
+            self.save_lammpstrj(small_struct, fname=(os.path.join(self.o_wd, f'{self.protein}x{self.chains}-T{self.temperatures[T]:.0f}.lammpstrj')), center=center)
+            small_struct.save_xtc(os.path.join(self.o_wd, f'{self.protein}x{self.chains}-T{self.temperatures[T]:.0f}.xtc'))
+            small_struct.save_netcdf(os.path.join(self.o_wd, f'{self.protein}x{self.chains}-T{self.temperatures[T]:.0f}.netcdf'))
+            # if os.path.exists(os.path.join(self.o_wd, 'topo.pdb')):
+            #     shutil.copyfile(os.path.join(self.o_wd, 'topo.pdb'), os.path.join(definitions.movie_dir, f'{self.protein}x{self.chains}-T{self.temperatures[T]:.0f}.pdb'))
+            # else:
+            #     pdb = glob.glob(os.path.join(self.o_wd, '*.pdb'))[0]
+            #     shutil.copyfile(pdb, os.path.join(definitions.movie_dir, f'{self.protein}x{self.chains}-T{self.temperatures[T]:.0f}.pdb'))
 
     def save_last_frame(self):
         for T, struct in enumerate(self.structures):
-            struct[-1].save_pdb(os.path.join(definitions.movie_dir, f'{self.protein}x{self.chains}-T{self.temperatures[T]:.0f}.pdb'))
+            struct[-1].save_pdb(os.path.join(self.o_wd, f'last_frame_{T}.pdb'))
 
     def get_box(self):
         dict = {}
-        for line in self.data_file:
-            if "xlo" and "xhi" in line:
-                dict["x"] = re.findall(r'-?\d+', line)
-            if "ylo" and "yhi" in line:
-                dict["y"] = re.findall(r'-?\d+', line)
-            if "zlo" and "zhi" in line:
-                dict["z"] = re.findall(r'-?\d+', line)
+        if not self.slab:
+            for line in self.data_file:
+                if "xlo" and "xhi" in line:
+                    dict["x"] = re.findall(r'-?\d+', line)
+                if "ylo" and "yhi" in line:
+                    dict["y"] = re.findall(r'-?\d+', line)
+                if "zlo" and "zhi" in line:
+                    dict["z"] = re.findall(r'-?\d+', line)
+        else:
+            for file in self.lmp_files:
+                for line in file:
+                    if "fxslab" in line and "unfix" not in line:
+                        dict["z"] = abs(float(re.findall(r'-?\d+', line)[1])*2)
+                    if "fxcontract" in line and "unfix" not in line:
+                        dict["y"] = abs(float(re.findall(r'-?\d+', line)[1])*2)
+                        dict["x"] = abs(float(re.findall(r'-?\d+', line)[1])*2)
+                    if "x" in dict and "y" in dict and "z" in dict:
+                        return dict
         return dict
 
     # TODO : MULTICHAIN CASE ?
@@ -370,7 +397,15 @@ class LMP:
         for atom in atoms:
             seq.append(mass_dict[atom[2]])
         seq_str = ''.join(seq)
-        return seq_str[:self.chain_atoms]
+        seq_str = seq_str[:self.chain_atoms]
+        seqs_avail = glob.glob(f'{definitions.hps_data_dir}/sequences/*.seq')
+        for seq_f in seqs_avail:
+            with open(seq_f, 'r') as fin:
+                txt = fin.readlines()[0]
+                if seq_str.replace('I', 'L') == txt.replace('I', 'L'):
+                    seq_str = txt
+                    break
+        return seq_str
 
     def run(self, file, n_cores=1):
         """
@@ -474,6 +509,7 @@ class LMP:
         nmin = []
 
         # We are not using self.structures here because we need the full trajectories
+        print("FILES", files)
         for f in files:
             tr = md.load(f, top=self._get_initial_frame())
             nmin.append(tr.n_frames)
@@ -524,8 +560,11 @@ class LMP:
             f += f'ITEM: NUMBER OF ATOMS \n'
             f += f'{traj.n_atoms} \n'
             f += f'ITEM: BOX BOUNDS pp pp pp \n'
-            for key in self.box:
-                f += f'{self.box[key][0]} {self.box[key][1]} \n'
+            f += f'-{self.box["x"]} {self.box["x"]} \n'
+            f += f'-{self.box["y"]} {self.box["y"]} \n'
+            f += f'-{self.box["z"]} {self.box["z"]} \n'
+            # for key in self.box:
+            #     f += f'{self.box[key][0]} {self.box[key][1]} \n'
             f += f'ITEM: ATOMS id type chain x y z \n'
             for c in range(self.chains):
                 for i, aa in enumerate(self.sequence):

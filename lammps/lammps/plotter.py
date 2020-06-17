@@ -12,7 +12,7 @@ import matplotlib
 from scipy import stats
 import matplotlib.pyplot as plt
 
-
+# DEPRECATED
 class Plotter(analysis.Analysis):
     def __init__(self, data_dir=None, force_recalc=False, **kwargs):
         """
@@ -46,7 +46,7 @@ class Plotter(analysis.Analysis):
         self.plot_id = None
 
         self.observables = ['rg', 'distance_map', 'contact_map', 'dij', 'flory',
-                            'charge', 'rho', 'rg_distr', 'inter_r', 'clusters']
+                            'charge', 'rho', 'rg_distr', 'inter_r', 'clusters','phase_diagram']
         self.force_recalc = force_recalc
 
         self.rg_Tc_legend_helper = {}
@@ -92,7 +92,7 @@ class Plotter(analysis.Analysis):
                     if "dielectric" in line:
                         eps = re.findall(r'\d+', line)[0]
                         epss.append(float(eps))
-                    if "ljlambda" in line:
+                    if "ljlambda" in line or "lj/cut/coul/debye" in line:
                     # if "pair_style" in line:
                         lj_lambda_line = line
                     if lj_lambda_line and eps:
@@ -111,6 +111,7 @@ class Plotter(analysis.Analysis):
                         ss.append(round(scale, 2))
                     if eps and I and scale:
                         break
+
         df["Protein"] = prots
         df["I"] = Is
         df["Eps"] = epss
@@ -121,7 +122,7 @@ class Plotter(analysis.Analysis):
         df.to_csv(os.path.join(self.this, 'index.txt'), sep=' ', mode='w')
         return df
 
-    def plot(self, observable, index, plot_id, **kwargs):
+    def plot(self, observable, plot_id, index=0, path=None, **kwargs):
         """
         Main function of the class. Essentially given an observable, attempt to plot it for one entry of the index
         dataframe (self.make_index)
@@ -152,15 +153,15 @@ class Plotter(analysis.Analysis):
         ls = df.iloc[index]["Scale"]
 
         self.protein = protein
-        if os.path.exists(os.path.join(os.path.join(definitions.hps_data_dir, 'sequences'), f'{self.protein}.seq')):
-            with open(os.path.join(os.path.join(definitions.hps_data_dir, 'sequences'), f'{self.protein}.seq')) as f:
-                self.sequence = f.readlines()[0]
-        else:
-            with open(os.path.join(os.path.join(definitions.hps_data_dir, 'sequences'), f'CPEB4.seq')) as f:
-                self.sequence = f.readlines()[0]
+        # if os.path.exists(os.path.join(os.path.join(definitions.hps_data_dir, 'sequences'), f'{self.protein}.seq')):
+        #     with open(os.path.join(os.path.join(definitions.hps_data_dir, 'sequences'), f'{self.protein}.seq')) as f:
+        #         self.sequence = f.readlines()[0]
+        # else:
+        #     with open(os.path.join(os.path.join(definitions.hps_data_dir, 'sequences'), f'CPEB4.seq')) as f:
+        #         self.sequence = f.readlines()[0]
 
         def_label = f'{protein}, I = {ionic_strength:.0f}, ε = {eps:.0f} HPS = {ls:.1f}'
-        self.label = kwargs["label"] if "label" in kwargs else def_label
+        self.label = kwargs.get("label", def_label)
         self.style = kwargs["style"] if "style" in kwargs else '-'
         self.color = kwargs["color"] if "color" in kwargs else None
 
@@ -170,10 +171,14 @@ class Plotter(analysis.Analysis):
         #     print("Requested data already available")
         #     self.obs_data = np.genfromtxt(os.path.join(d, 'data.txt'))
 
-        self.o_wd = df.iloc[index]["FullPath"]
-        # TODO BETTER WAY FOR THIS ???
-        # TODO : Maybe pass metaobject to plot ?
-        super().__init__(oliba_wd=self.o_wd)
+        if path:
+            self.o_wd = path
+        else:
+            self.o_wd = df.iloc[index]["FullPath"]
+            # TODO BETTER WAY FOR THIS ???
+            # TODO : Maybe pass metaobject to plot ?
+        equil_frames = kwargs.get('equil_frames', 300)
+        super().__init__(oliba_wd=self.o_wd, equil_frames=equil_frames)
         # TODO : TOO LATE TO DO THIS ?
         self.temperatures = self.get_temperatures()
 
@@ -198,12 +203,17 @@ class Plotter(analysis.Analysis):
             data = self.plot_q_distr(**kwargs)
         if observable == 'rg_distr':
             data = self.plot_rg_distr(**kwargs)
+        if observable == 'phase_diagram':
+            first = kwargs.get('first',0)
+            last = kwargs.get('last',None)
+            data = self.plot_phase_diagram(first=first, last=last)
         if observable == 'clusters':
             data = self.plot_clusters(**kwargs)
         if observable == 'rho':
             temperature = kwargs["temperature"] if "temperature" in kwargs else 0
             data = self.plot_density_profile(T=temperature)
-        self.axis.legend(fontsize=self.label_fsize)
+        if self.label != def_label:
+            self.axis.legend(fontsize=self.label_fsize)
         self.axis.xaxis.set_tick_params(labelsize=self.ticks_fsize)
         self.axis.yaxis.set_tick_params(labelsize=self.ticks_fsize)
         # if self.obs_data is None:
@@ -488,6 +498,34 @@ class Plotter(analysis.Analysis):
         capline[1].set_markersize(10)
         self.axis.add_artist(leg)
         return np.array([florys, r0s, err])
+
+    def plot_phase_diagram(self, first=0, last=None):
+        dilute, condensed = self.phase_diagram()
+        err_dilute = self.block_error(dilute)
+        err_condensed = self.block_error(condensed)
+        dilute = dilute.mean(axis=1)
+        condensed = condensed.mean(axis=1)
+        rho_solv, rho_drop, Tc, ext_T, rho_crit = self.find_Tc_from_diagram(rho_condensed=condensed[first:last],
+                                                              rho_solvated=dilute[first:last],
+                                                              temperatures=self.temperatures[first:last],
+                                                              err_condensed=err_condensed,
+                                                              err_dilute=err_dilute)
+
+        # DATA
+        p = self.axis.plot(dilute, self.temperatures, self.style, label=self.label, color=self.color)
+        self.axis.plot(condensed, self.temperatures,  self.style, label=self.label, color=p[0].get_color())
+        self.axis.errorbar(dilute, self.temperatures, xerr=err_dilute, xlolims=True, xuplims=True, fmt='', color=p[0].get_color())
+        self.axis.errorbar(condensed, self.temperatures, xerr=err_dilute, xlolims=True, xuplims=True, fmt='', color=p[0].get_color())
+
+        # FIT
+        if rho_solv is not None:
+            p2 = self.axis.plot(rho_solv, ext_T, color='red')
+            # self.axis.plot(rho_drop, ext_T, color=p2[0].get_color())
+            self.axis.plot(rho_drop, ext_T, color='green')
+        # self.axis.plot(Tc[0], rho_crit, 'x')
+        self.axis.set_xlabel("Density", fontsize=self.label_fsize)
+        self.axis.set_ylabel("T(K)", fontsize=self.label_fsize)
+        return None
 
     def plot_density_profile(self, T, axis=0):
         """

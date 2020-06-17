@@ -1,11 +1,11 @@
-import hoomdsetup
+import hmdsetup
 import hoomd
 from hoomd import md
 
 temperature = "300.0 318.18 336.36 354.55 372.73 390.91 409.09 427.27 445.45 463.64 481.82 500.0"
 l = 400
 
-hps = hoomdsetup.HPS(protein='CPEB4')
+hps = hmdsetup.HPS(protein='CPEB4')
 
 hoomd.context.initialize("")
 box = hoomd.data.boxdim(Lx=l, Ly=l, Lz=l)

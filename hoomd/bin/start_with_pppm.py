@@ -1,4 +1,4 @@
-import hoomdsetup
+import hmdsetup
 import hoomd
 from hoomd import md
 
@@ -6,7 +6,7 @@ from hoomd import md
 l = 400
 temperature = 300
 
-hps = hoomdsetup.HPS(protein='CPEB4')
+hps = hmdsetup.HPS(protein='CPEB4')
 hoomd.context.initialize("")
 box = hoomd.data.boxdim(Lx=l, Ly=l, Lz=l)
 snap = hoomd.data.make_snapshot(N=len(hps.sequence),
