@@ -84,7 +84,7 @@ def vmin(phiPS_a_v, phiPS_ori):
 
     return min(1, phiori/phia, (1-phiori)/(1-phia), \
                   phisori/phisa, (1-phisori)/(1-phisa), \
-                  (1-phiori-phisori)/(1-phia-phisa)     )   
+                  (1-phiori-phisori)/(1-phia-phisa))
 
 
 def ps_bi_solve( HP, u, phiPS_ori ,r_vini, useJ ): 

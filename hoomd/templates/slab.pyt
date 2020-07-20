@@ -77,21 +77,17 @@ for i in range(len(particle_types)):
     for j in range(i, len(particle_types)):
         aa_j = particle_types[j]
         cutoff=3.5
-        qi = particles[aa_i]["q"] * cnt.e
-        qj = particles[aa_j]["q"] * cnt.e
         if particles[aa_i]["q"] == 0 or  particles[aa_j]["q"] == 0:
             cutoff=0
-            qiqj = 0.
-        else:
-            cutoff = 3.5
-            qiqj = qi*qj/(4*math.pi*cnt.epsilon_0*80)
-            qiqj *= 10**-3*cnt.Avogadro*10**9
-        yukawa.pair_coeff.set(aa_i, aa_j, kappa=1., epsilon=qiqj, r_cut=cutoff, r_on=cutoff)
+        qi = particles[aa_i]["q"]*cnt.e
+        qj = particles[aa_j]["q"]*cnt.e
+        qiqj = qi*qj*10**-3*cnt.Avogadro/(4*math.pi*cnt.epsilon_0*80)
+        yukawa.pair_coeff.set(aa_i, aa_j, kappa=0.1*10, epsilon=qiqj, r_cut=cutoff)
 
 
-hoomd.analyze.log(filename=f"log_{temperature:.0f}.log", quantities=['potential_energy', 'bond_harmonic_energy', 'pair_yukawa_energy', 'pair_table_energy'], period=$save, overwrite=True)
+hoomd.analyze.log(filename=f"log_{temperature:.0f}.log", quantities=['potential_energy', 'kinetic_energy' ,'temperature', 'bond_harmonic_energy', 'time'], period=$save, overwrite=True)
 hoomd.dump.gsd(filename=f"trajectory_{temperature:.0f}.gsd", period=$save, group=hoomd.group.all(), overwrite=True)
-hoomd.dump.dcd(filename=f"trajectory_{temperature:.0f}.dcd", period=$save, group=hoomd.group.all(), overwrite=True, unwrap_full=True)
+hoomd.dump.dcd(filename=f"trajectory_{temperature:.0f}.dcd", period=$save, group=hoomd.group.all(), overwrite=True)
 
 # dt in picosecond units (10**-12) while dt in femtoseconds in lammps (10**-15). And we typically use 10fs in lammps
 # which is 0.01
@@ -104,5 +100,15 @@ for i in range(len(particle_types)):
     lang.set_gamma(aa_i, mass/100)
     lang.set_gamma_r(aa_i, mass/100)
 #hoomd.md.integrate.nve(group=hoomd.group.all())
+h_c = hoomd.variant.linear_interp([(0, l), ($contract_t, $final_slab_x)])
+collapse_r = hoomd.update.box_resize(Lx=h_c, Ly=h_c, Lz=h_c, scale_particles=False)
+
+hoomd.run($contract_t)
+collapse_r.disable()
+
+h_e = hoomd.variant.linear_interp([(0, $final_slab_x), ($slab_t, $final_slab_z)])
+expansion_z = hoomd.update.box_resize(Lz=h_e, scale_particles=False)
+hoomd.run($slab_t)
+expansion_z.disable()
 
 hoomd.run($t)

@@ -311,6 +311,32 @@ class Analysis(lmp.LMP):
         # final_err = np.sqrt((err/(tot_means*np.log(tot_ijs)))**2 + (np.array(covs)[:, 0])**2)
         return np.array(florys), np.array(r0s), np.array(covs)[:, 0]
 
+    def pair_potential(self, model='HPS'):
+        """
+        Utility for getting the HPS potential for the given current parameters for plotting
+        :return:
+        """
+
+        def HPS_potential(r, eps, lambd, sigma):
+            V = 4 * eps * ((sigma / r) ** 12 - (sigma / r) ** 6)
+            close_cond = np.where(r <= 2 ** (1 / 6) * sigma)
+            far_cond = np.where(r > 2 ** (1 / 6) * sigma)
+            V[close_cond] = V[close_cond] + (1 - lambd) * eps
+            # V[far_cond] = lambd*V[far_cond]
+            return V
+
+        r = np.linspace(5, 10, 200)
+        aa_pot = {}
+        for aa in self.residue_dict.keys():
+            if model=='HPS':
+                lamb = self.residue_dict[aa]["lambda"]
+                sigm = np.zeros_like(r)
+                sigm[:] = self.residue_dict[aa]["sigma"]
+                eps=0.2
+            # if model=='KH':
+            aa_pot[aa] = HPS_potential(r, eps=eps, lambd=lamb, sigma=sigm)
+        return r, aa_pot
+
     # TODO : UNTESTED
     def distance_map_by_residue(self, contacts):
         """
@@ -340,13 +366,13 @@ class Analysis(lmp.LMP):
         rg = monomer_l * (self.chain_atoms / 6) ** 0.5
         return rg
 
-    def rg(self, use='md'):
+    def rg(self, use='md', full=False):
         """
         Calculate rg from the LAMMPS trajectories simulations
         :param use: string, either lmp or md. If lmp get rg's from the log.lammps.T, if md from MDTraj
         :return: ndarray[T,frames], rg's
         """
-        rgs = []
+        rgs, err = [], []
         if use == 'lmp':
             if self.chains != 1:
                 raise SystemError("LMP method not reliable for Multichain systems")
@@ -371,7 +397,12 @@ class Analysis(lmp.LMP):
                 else:
                     rg = md.compute_rg(traj) * 10.
                 rgs.append(rg)
-        return np.array(rgs)
+        for i in range(len(rgs)):
+            err.append(self.block_error(observable=np.array([rgs[i]]))[0])
+            if full is False:
+                print(rgs[i].shape)
+                rgs[i] = rgs[i].mean()
+        return np.array(rgs), np.array(err)
 
     # TODO : TDP USEFUL ONLY
     def topo_minimize(self, T, new_seq, temp_dir='/home/adria/TDP'):
@@ -906,8 +937,7 @@ class Analysis(lmp.LMP):
             # Caa is symmetric
             caa[:, lag + n_lags] = acf / ((len(slab_bins) - lag) * np.var(xa, axis=1))
             caa[:, -lag + n_lags] = acf / ((len(slab_bins) - lag) * np.var(xa, axis=1))
-
-        caa = caa[:, len(slab_bins)//n_lags:]
+        caa = caa[:, (n_lags*2-len(slab_bins)):]
 
         pa = np.ones_like(caa)
         pa[caa < 0.5] = 0
@@ -919,12 +949,12 @@ class Analysis(lmp.LMP):
         # WORKS
         for lag in range(0, n_lags):
             xa_mod = xa[:, lag:]
-            pa_lag = np.flip(pa, axis=1)[:, :(2 * n_lags - lag - len(slab_bins)//n_lags)]
+            pa_lag = np.flip(pa, axis=1)[:, :(2 * n_lags - lag - (n_lags*2-len(slab_bins)))]
             xcc[:, lag] = np.sum(xa_mod * pa_lag, axis=1)
 
         for lag in range(0, n_lags):
             xa_mod = np.flip(xa, axis=1)[:, lag:]
-            pa_lag = pa[:, :(2 * n_lags - lag - len(slab_bins)//n_lags)]
+            pa_lag = pa[:, :(2 * n_lags - lag - (n_lags*2-len(slab_bins)))]
             xcc[:, -lag] = np.sum(xa_mod * pa_lag, axis=1)
 
         nmaxs2 = []
@@ -943,12 +973,12 @@ class Analysis(lmp.LMP):
         rho_z = x_shift
         return z, rho_z
 
-    def interface_position(self, z, rho_z):
+    def interface_position(self, z, rho_z, cutoff=0.9):
         def tanh_fit(x, s, y0, x0):
             y = y0 - y0 * np.tanh((x + x0) * s)
             return y
-        rho_z_plus = rho_z[np.where(z >= 0)]
-        rho_z_minus = rho_z[np.where(z <= 0)]
+        rho_z_plus = rho_z[np.where(z >= 0)][:-20]
+        rho_z_minus = rho_z[np.where(z <= 0)][:-30]
 
         try:
             popt_plus, pcov_plus = curve_fit(tanh_fit, np.arange(0, rho_z_plus.shape[0]), rho_z_plus)
@@ -956,80 +986,42 @@ class Analysis(lmp.LMP):
             rho_interp = np.interp(np.linspace(0, rho_z_plus.shape[0], 10000),
                                    np.arange(0, rho_z_plus.shape[0]),
                                    rho_fit)
-            intf_cutoff = rho_interp.max() * 0.1
+            # intf_cutoff = rho_interp.max() * 0.1
+            intf_cutoff = rho_interp.max() * cutoff
             interface_idx = np.argmin(np.abs(rho_interp - intf_cutoff))
             interface_z_plus = np.linspace(0, z.max(), 10000)[interface_idx]
         except:
-            print("> Interface fit failed for positive z, returning 0 (no interface) !!!")
             interface_z_plus = 0
+            print("> Interface fit failed for positive z, returning 0 (no interface) !!!")
         try:
             popt_minus, pcov_minus = curve_fit(tanh_fit, np.arange(0, rho_z_minus.shape[0]), np.flip(rho_z_minus))
             rho_fit = tanh_fit(np.arange(0, rho_z_minus.shape[0]), *popt_minus)
             rho_interp = np.interp(np.linspace(0, rho_z_minus.shape[0], 10000),
                                    np.arange(0, rho_z_minus.shape[0]),
                                    rho_fit)
-            intf_cutoff = rho_interp.max() * 0.1
+            intf_cutoff = rho_interp.max() * cutoff
             interface_idx = np.argmin(np.abs(rho_interp - intf_cutoff))
             interface_z_minus = np.linspace(0, z.max(), 10000)[interface_idx]
             interface_z_minus = -interface_z_minus
         except:
-            print("> Interface fit failed for negative z, returning 0 (no interface) !!!")
             interface_z_minus = 0
+            print("> Interface fit failed for negative z, returning 0 (no interface) !!!")
 
-        return [interface_z_minus, interface_z_plus]
+        # import matplotlib.pyplot as plt
+        # plt.figure()
+        # plt.plot(z, rho_z)
+        # plt.axvline(interface_z_plus)
+        # plt.axvline(-interface_z_plus)
 
-    def interface_position_old(self, rho_z, slab_bins):
-        def tanh_fit(x, s, y0, x0):
-            y = y0 - y0 * np.tanh((x + x0) * s)
-            return y
+        return [-interface_z_plus, interface_z_plus]
 
-        minn_plus = rho_z[np.where(slab_bins >= 0)]
-        minn_minus = rho_z[np.where(slab_bins <= 0)]
-        # TODO ?
-        # x_plus = np.linspace(0, slab_bins.max(), minn_plus.shape[0])
-        print(minn_plus.shape[0])
-        # x_plus = np.linspace(0, 650, minn_plus.shape[0])
-        x_plus = np.arange(0, minn_plus.shape[0])
-        # x_minus = np.linspace(slab_bins.min(), 0, minn_minus.shape[0])
-        # x_minus = np.linspace(-10, 0, minn_minus.shape[0])
-        x_minus = np.linspace(-100, 0, minn_minus.shape[0])
-        try:
-            # popt_plus, pcov_plus = curve_fit(tanh_fit, x_plus, minn_plus)
-            popt_plus, pcov_plus = curve_fit(tanh_fit, x_plus, minn_plus)
-            print(popt_plus)
-            popt_minus, pcov_minus = curve_fit(tanh_fit, x_minus, minn_minus)
-        except:
-            print("> Interface fit failed, returning 0 (no interface) !!!")
-            return 0, 0
-
-        xvals_plus = np.linspace(0, slab_bins.max(), 10000)
-        fit_plus = tanh_fit(x_plus, *popt_plus)
-        z_fit_plus = slab_bins[slab_bins > 0]
-        yinterp = np.interp(xvals_plus, z_fit_plus, fit_plus)
-        max_tan = yinterp.max()
-        cutoff = max_tan * 0.1
-        idx_interface_plus = np.argmin(np.abs(yinterp - cutoff))
-        print(xvals_plus[idx_interface_plus])
-
-        xvals_minus = np.linspace(slab_bins.min(), 0, 10000)
-        fit_minus = tanh_fit(x_minus, *popt_minus)
-        z_fit_minus = slab_bins[slab_bins < 0]
-        yinterp = np.interp(xvals_minus, z_fit_minus, fit_minus)
-        max_tan = yinterp.max()
-        cutoff = max_tan * 0.1
-        idx_interface_minus = np.argmin(np.abs(yinterp - cutoff))
-
-        return z_fit_plus, minn_plus, fit_plus
-        # return z_fit_minus, minn_minus, fit_minus
-        # return xvals_plus[idx_interface_plus], xvals_minus[idx_interface_minus]
-
-    def phase_diagram(self):
+    def phase_diagram(self, cutoff=0.9):
         dilute_densities = []
         condensed_densities = []
         for T in range(len(self.temperatures)):
             z, rho_z = self.density_profile(T=T, noise=False)
             # z_fit, rho_fit, tanh_fit, interface_pos = self.interface_position(rho_z=rho_z.mean(axis=0), slab_bins=z)
-            interface = self.interface_position(rho_z=rho_z.mean(axis=0), z=z)
+            interface = self.interface_position(rho_z=rho_z.mean(axis=0), z=z, cutoff=cutoff)
             # diluted = ((-interface_pos > c) + (interface_pos < c)).sum(axis=1)
             # condensed = ((-interface_pos <= c) & (interface_pos >= c)).sum(axis=1)
             c = self.structures[T].xyz[:, :, 2] * 10.
@@ -1045,9 +1037,9 @@ class Analysis(lmp.LMP):
             volume_condensed = ((interface[1] - interface[0]) * self.box["x"] * self.box["y"])
             volume_dilute = self.box["x"] * self.box["y"] * self.box["z"] - volume_condensed
             # dilute_densities.append(diluted*mass_dilute/volume_dilute)
-            dilute_densities.append(mass_dilute / volume_dilute)
+            dilute_densities.append((mass_dilute / volume_dilute).mean())
             # condensed_densities.append(condensed*mass_condensed/volume_condensed)
-            condensed_densities.append(mass_condensed / volume_condensed)
+            condensed_densities.append((mass_condensed / volume_condensed).mean())
 
         dilute_densities = np.array(dilute_densities)
         condensed_densities = np.array(condensed_densities)
@@ -1074,33 +1066,32 @@ class Analysis(lmp.LMP):
             # These fits perform good but parameters are bad if points in the left are also bad I guess
             # return 2*(rho_c + A2 * (Tc_rd - x))
 
-        failed = False
-        try:
-            popt, pcovt = curve_fit(scaling_coex_densities, temperatures, - rho_c + rho_d)
-            popt2, pcovt2 = curve_fit(rectilinear_diametres, temperatures, (rho_c + rho_d),
-                                      p0=[0.2, popt[1], 0.2])
-        except:
-            print("Optimization failed")
-            failed = True
+    # try:
+        popt, pcovt = curve_fit(scaling_coex_densities, temperatures, - rho_c + rho_d)
+        # popt2, pcovt2 = curve_fit(rectilinear_diametres, temperatures, (rho_c + rho_d),
+        #                           p0=[0.2, 0.2, 0.2])
+                                  # p0=[0.2, popt[1], 0.2])
+        # print(popt)
+        print(popt)
+    # except:
+        print("Optimization failed")
+        return None, None
 
-        if not failed:
-            critical_T = [popt[1], popt2[1]]
-            critical_rho = popt2[2]
-            ext_T = np.linspace(np.max(temperatures), critical_T[0], 2000)
-            rho_drop_fit = (scaling_coex_densities(ext_T, *popt) + rectilinear_diametres(ext_T, *popt2)) / 2
-            rho_solv_fit = (-scaling_coex_densities(ext_T, *popt) + rectilinear_diametres(ext_T, *popt2)) / 2
-        else:
-            return None, None, None, None, None
-        # fit = np.zeros(shape=(4000, 2))
-        # fit[:2000, 0] = rho_solv_fit
-        # fit[2000:, 0] = np.flip(rho_drop_fit)
-        # fit[:2000, 1] = ext_T
-        # fit[2000:, 1] = np.flip(ext_T)
-        fit = np.zeros(shape=(2, 4000))
-        fit[0, :2000] = rho_solv_fit
-        fit[0, 2000:] = np.flip(rho_drop_fit)
-        fit[1, :2000] = ext_T
-        fit[1, 2000:] = np.flip(ext_T)
+        critical_T = [popt[1], popt2[1]]
+        critical_rho = popt2[2]
+        ext_T = np.linspace(np.max(temperatures), critical_T[0], 2000)
+        rho_drop_fit = (scaling_coex_densities(ext_T, *popt) + rectilinear_diametres(ext_T, *popt2)) / 2
+        rho_solv_fit = (-scaling_coex_densities(ext_T, *popt) + rectilinear_diametres(ext_T, *popt2)) / 2
+        fit = np.zeros(shape=(4000, 2))
+        fit[:2000, 0] = rho_solv_fit
+        fit[2000:, 0] = np.flip(rho_drop_fit)
+        fit[:2000, 1] = ext_T
+        fit[2000:, 1] = np.flip(ext_T)
+        # fit = np.zeros(shape=(2, 4000))
+        # fit[0, :2000] = rho_solv_fit
+        # fit[0, 2000:] = np.flip(rho_drop_fit)
+        # fit[1, :2000] = ext_T
+        # fit[1, 2000:] = np.flip(ext_T)
         cr_point = [critical_rho, critical_T[0]]
         return fit[:, :2000], cr_point
 
@@ -1153,3 +1144,49 @@ def flory_scaling(r0):
         return r0 * (x ** flory)
 
     return flory
+
+
+# def interface_position_old(self, rho_z, slab_bins, cutoff=0.5):
+#     def tanh_fit(x, s, y0, x0):
+#         y = y0 - y0 * np.tanh((x + x0) * s)
+#         return y
+#
+#     minn_plus = rho_z[np.where(slab_bins >= 0)]
+#     minn_minus = rho_z[np.where(slab_bins <= 0)]
+#     # TODO ?
+#     # x_plus = np.linspace(0, slab_bins.max(), minn_plus.shape[0])
+#     print(minn_plus.shape[0])
+#     # x_plus = np.linspace(0, 650, minn_plus.shape[0])
+#     x_plus = np.arange(0, minn_plus.shape[0])
+#     # x_minus = np.linspace(slab_bins.min(), 0, minn_minus.shape[0])
+#     # x_minus = np.linspace(-10, 0, minn_minus.shape[0])
+#     x_minus = np.linspace(-100, 0, minn_minus.shape[0])
+#     try:
+#         # popt_plus, pcov_plus = curve_fit(tanh_fit, x_plus, minn_plus)
+#         popt_plus, pcov_plus = curve_fit(tanh_fit, x_plus, minn_plus)
+#         print("HERE", popt_plus)
+#         popt_minus, pcov_minus = curve_fit(tanh_fit, x_minus, minn_minus)
+#     except:
+#         print("> Interface fit failed, returning 0 (no interface) !!!")
+#         return 0, 0
+#
+#     xvals_plus = np.linspace(0, slab_bins.max(), 10000)
+#     fit_plus = tanh_fit(x_plus, *popt_plus)
+#     z_fit_plus = slab_bins[slab_bins > 0]
+#     yinterp = np.interp(xvals_plus, z_fit_plus, fit_plus)
+#     max_tan = yinterp.max()
+#     cutoff = max_tan * 0.9
+#     idx_interface_plus = np.argmin(np.abs(yinterp - cutoff))
+#     print(xvals_plus[idx_interface_plus])
+#
+#     xvals_minus = np.linspace(slab_bins.min(), 0, 10000)
+#     fit_minus = tanh_fit(x_minus, *popt_minus)
+#     z_fit_minus = slab_bins[slab_bins < 0]
+#     yinterp = np.interp(xvals_minus, z_fit_minus, fit_minus)
+#     max_tan = yinterp.max()
+#     cutoff = max_tan * 0.9
+#     idx_interface_minus = np.argmin(np.abs(yinterp - cutoff))
+#
+#     return z_fit_plus, minn_plus, fit_plus
+#     # return z_fit_minus, minn_minus, fit_minus
+#     # return xvals_plus[idx_interface_plus], xvals_minus[idx_interface_minus]

@@ -44,7 +44,7 @@ class LMP:
             self.box = self.get_box()
             self.protein = self.get_protein_from_sequence()
             self.sequence = self.get_seq_from_hps()
-            self.data = self.get_lmp_data()
+            # self.data = self.get_lmp_data()
             self.structures = None
             self.equil_frames = equil_frames
             self.temperatures = self.get_temperatures()
@@ -464,13 +464,14 @@ class LMP:
                         every = int(tr.n_frames/total_frames)-1
                         if every <= 0: every = 1
                 tr = tr[self.equil_frames::every]
-                tr = tr[-total_frames:]
+                # tr = tr[-total_frames:]
             n_frames.append(tr.n_frames)
             structures.append(tr)
-        minn = np.array(n_frames).min()
-        if not self.temper:
-            for i in range(len(structures)):
-                structures[i] = structures[i][:minn]
+        # TODO: This must leave, best sampling. Careful!
+        # minn = np.array(n_frames).min()
+        # if not self.temper:
+        #     for i in range(len(structures)):
+        #         structures[i] = structures[i][:minn]
         if total_frames is not None and not self.rerun and not self.silent:
             print(f"> Taking frames every {every} for a total of {total_frames} to avoid strong correlations")
             self.last_frames = total_frames
@@ -584,7 +585,7 @@ class LMP:
         if os.path.exists(os.path.join(self.o_wd, 'topo.pdb')):
             return os.path.join(self.o_wd, 'topo.pdb')
         else:
-            files = glob.glob(os.path.join(self.o_wd, 'data.data'))
+            files = glob.glob(os.path.join(self.o_wd, '*.data'))
             file = os.path.basename(files[0])
             file = file.replace('.data', '')
             lammps2pdb = self.lmp2pdb

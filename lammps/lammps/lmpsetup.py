@@ -4,6 +4,7 @@ import scipy.constants as cnt
 import numpy as np
 import stat
 import math
+import pandas as pd
 import os
 import mdtraj as md
 import pathlib
@@ -37,6 +38,8 @@ class LMPSetup:
         self.this = os.path.dirname(os.path.dirname(__file__))
         self.hps_pairs = None
         self.equil_start = equil_start
+        self.fix_region = kwargs.get('fix_region', None)
+        self.fixed_atoms = None
 
         # --- EXPLICIT RUN PARAMETERS --- #
         self.t = kwargs.get('t', 100000000)
@@ -44,7 +47,7 @@ class LMPSetup:
         self.chains = chains
         self.ionic_strength = kwargs.get('ionic_strength', 100e-3) # In Molar
         self.temperatures = kwargs.get('temperatures', [300, 320, 340, 360, 380, 400])
-        self.box_size = {"x": 500, "y": 500, "z": 500}
+        self.box_size = {"x": 2500, "y": 2500, "z": 2500}
         self.water_perm = kwargs.get('water_perm', 80.)
         self.use_temp_eps = use_temp_eps
         self.v_seed = kwargs.get('v_seed', 494211)
@@ -69,13 +72,18 @@ class LMPSetup:
         # self.final_slab_volume = self.box_size["x"]/4
         self.slab_dimensions = {}
         droplet_zlength = 500
-        self.slab_dimensions["x"] = (self.chains*4*math.pi/3/droplet_zlength*self.rw_rg()**3)**0.5
-        self.slab_dimensions["y"] = (self.chains*4*math.pi/3/droplet_zlength*self.rw_rg()**3)**0.5
+        # self.slab_dimensions["x"] = 1.3*(self.chains*4*math.pi/3/droplet_zlength*self.rw_rg()**3)**0.5
+        self.slab_dimensions["x"] = 1.5*(self.chains*4*math.pi/3/droplet_zlength*self.rw_rg()**3)**0.5
+        self.slab_dimensions["y"] = self.slab_dimensions["x"]
         self.slab_dimensions["z"] = 5*droplet_zlength
 
         self.final_slab_volume = self.box_size["x"]/4
         self.deformation_ts = kwargs.get('deformation_ts', 1)
         # ------------------------- #
+
+        # ---------- KH ----------- #
+        self.kh_alpha = 0.228
+        self.kh_eps0 = -1
 
         self.use_random = kwargs.get('use_random', False)
 
@@ -148,7 +156,7 @@ class LMPSetup:
         ordered_keys = sorted(self.residue_dict, key=lambda x: (self.residue_dict[x]['id']))
         self.key_ordering = ordered_keys
 
-    def make_equilibration_traj(self, t=500000):
+    def make_equilibration_traj(self, t=1000000):
         """
         Generate an equilibration trajectory
         :param t: How many steps do we want to run
@@ -160,8 +168,8 @@ class LMPSetup:
         meta_maker.save = int(t/10)
         meta_maker.temperatures = [300]
         meta_maker.write_hps_files(equil=True, qsub=False, silent=True)
-        meta_maker.run('lmp.lmp', n_cores=8)
-        traj = md.load(os.path.join(self.this, 'temp/dcd_traj.dcd'), top=os.path.join(self.this, 'temp/topo.pdb'))
+        meta_maker.run('lmp0.lmp', n_cores=8)
+        traj = md.load(os.path.join(self.this, 'temp/dcd_traj_0.dcd'), top=os.path.join(self.this, 'temp/topo.pdb'))
         self.xyz = traj[-1].xyz * 10
         mx = np.abs(self.xyz).max()
         self.box_size["x"] = int(mx * 3)
@@ -382,7 +390,7 @@ class LMPSetup:
                 else:
                     cutoff = 0.0
                 lambda_ij = lambda_ij * self.hps_scale
-                if self.model == 'gHPS' or self.model=='gHPS-T':
+                if self.model == 'gHPS' or self.model == 'gHPS-T':
                     C6 = -4*self.hps_epsilon*sigma_ij**6*(1+self.a6*(lambda_ij-1))
                     C12 = 4*self.hps_epsilon*sigma_ij**12*(1+(1-self.a6)*(lambda_ij-1))
                     print(-C12/C6 < 0, 1+self.a6*(lambda_ij-1))
@@ -390,8 +398,28 @@ class LMPSetup:
                     new_eps = 0.25*C6**2/C12
                     line = 'pair_coeff         {:2d}      {:2d}       {:.6f}   {:.3f}    {:6.3f}  {:6.3f}\n'.format(
                         i + 1, j + 1, new_eps, new_sigma, 3 * sigma_ij, cutoff)
+                elif self.model.lower() == 'kh':
+                    ks = pd.read_csv('/home/adria/scripts/data/hps/kh_f.dat', sep=" ", index_col=0)
+                    res_i = self.key_ordering[i]
+                    res_j = self.key_ordering[j]
+                    eps_ij = ks[res_j][res_i]
+                    line = 'pair_coeff         {:2d}      {:2d}       {: .6f}   {:.3f}    {:6.3f} {:6.3f}\n'.format(
+                        i + 1, j + 1, eps_ij, sigma_ij, 3 * sigma_ij, cutoff)
+                elif self.model.lower() == 'kh-hps':
+                    ks = pd.read_csv('/home/adria/scripts/data/hps/kh.dat', sep=" ", index_col=0)
+                    res_i = self.key_ordering[i]
+                    res_j = self.key_ordering[j]
+                    eps_ij = ks[res_j][res_i]
+                    epss = eps_ij/self.kh_alpha + self.kh_eps0
+                    if epss <= self.kh_eps0:
+                        lambda_ij = 1
+                    else:
+                        lambda_ij = -1
+                    eps_ij = abs(eps_ij)
+                    line = 'pair_coeff         {:2d}      {:2d}       {: .6f}   {:.3f}    {:.6f}  {:6.3f}  {:6.3f}\n'.format(
+                        i + 1, j + 1, eps_ij, sigma_ij, lambda_ij, 3 * sigma_ij, cutoff)
                 else:
-                    line = 'pair_coeff         {:2d}      {:2d}       {:.6f}   {:.3f}    {:.6f}  {:6.3f}  {:6.3f}\n'.format(
+                    line = 'pair_coeff         {:2d}      {:2d}       {: .6f}   {:.3f}    {:.6f}  {:6.3f}  {:6.3f}\n'.format(
                         i + 1, j + 1, self.hps_epsilon, sigma_ij, lambda_ij, 3 * sigma_ij, cutoff)
                 lines.append(line)
         self.hps_pairs = lines
@@ -495,8 +523,8 @@ class LMPSetup:
             preface_subst = preface_template.safe_substitute(self.lmp_file_dict)
             if self.slab:
                 lmp_temp_file = open(os.path.join(self.this, 'templates/general/hps_slab.lmp'))
-            elif equil:
-                lmp_temp_file = open(os.path.join(self.this, 'templates/general/hps_equil.lmp'))
+            # elif equil:
+            #     lmp_temp_file = open(os.path.join(self.this, 'templates/general/hps_equil.lmp'))
             elif rerun:
                 lmp_temp_file = open(os.path.join(self.this, 'templates/general/hps_rerun.lmp'))
             else:
@@ -505,7 +533,21 @@ class LMPSetup:
             lmp_template = Template(lmp_temp_file.read())
             lmp_subst = lmp_template.safe_substitute(self.lmp_file_dict)
 
-            lmp_subst = preface_subst + lmp_subst
+            # TODO : NOT CLEAN...
+            if self.fix_region is not None:
+                helper = []
+                for c in range(self.chains):
+                    d = np.array(self.fix_region)
+                    d = d * (c + 1)
+                    helper.append(f'{d[0]:.0f}:{d[1]:.0f}')
+                helper = ' '.join(helper)
+                self.lmp_file_dict["fix_group"] = helper
+                fixed = open(os.path.join(self.this, 'templates/general/hps_fix_rigid.lmp'))
+                fixed_template = Template(fixed.read())
+                fixed_subst = fixed_template.safe_substitute(self.lmp_file_dict)
+            else:
+                fixed_subst = ""
+            lmp_subst = preface_subst + fixed_subst + lmp_subst
 
         topo_temp_file = open(os.path.join(self.this, 'templates/hps_data.data'))
         topo_template = Template(topo_temp_file.read())
@@ -584,9 +626,11 @@ class LMPSetup:
                     else:
                         res_name = 'N'
                 else:
-                    res_name = aa
+                    res_name = self.residue_dict[aa]["name"]
                 # Empty space is chain ID, which seems to not be strictly necessary...
-                xyz += f'ATOM  {c + 1:>5} {res_name:>4}   {res_name} {" "} {i + 1:>3}    {coords[0]:>8.2f}{coords[1]:>8.2f}{coords[2]:>8.2f}  1.00  0.00      PROT \n'
+                # xyz += f'ATOM  {c + 1:>5} {res_name:>4}   {res_name} {" "} {i + 1:>3}    {coords[0]:>8.2f}{coords[1]:>8.2f}{coords[2]:>8.2f}  1.00  0.00      PROT \n'
+                tag = "CA"
+                xyz += f'ATOM  {c + 1:>5}{tag:>4}  {res_name} {chr(65+n)} {i + 1:>3}    {coords[0]:>8.2f}{coords[1]:>8.2f}{coords[2]:>8.2f}  1.00  0.00      C \n'
                 c += 1
             # TODO : Ovito stops reading after first TER...
         bonds = ''
@@ -610,6 +654,9 @@ class LMPSetup:
                 self.lmp_file_dict["pair_parameters"] = f"{self.debye_wv} 0.0"
             else:
                 self.lmp_file_dict["pair_parameters"] = f"{round(1 / self.debye_length(T) * 10 ** -10, 3)} 0.0"
+        elif self.model.lower() == 'kh':
+            self.lmp_file_dict["pair_potential"] = 'kh/cut/coul/debye'
+            self.lmp_file_dict["pair_parameters"] = f"{self.debye_wv} 0.0 35.0"
         else:
             self.lmp_file_dict["pair_potential"] = 'ljlambda'
             if self.debye_wv:

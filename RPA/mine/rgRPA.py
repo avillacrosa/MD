@@ -1,148 +1,287 @@
-from math import log, sqrt, pi, exp
+# import multiprocessing as mp
+import pathos.multiprocessing as mp
+
 import numpy as np
-import scipy.integrate as integrate
+
+import seq_list as sl
 import scipy.optimize as sco
-import seq_list
+import free_f as ff
+from numpy import pi
 
 
 class rgRPA:
-    def __init__(self, phi_m):
-        self.T_star = 0.286
-        self.eta = 1
+    def __init__(self, u, seqname, phiTop, phisTop, phiBot=None, phisBot=None, zc=1, zs=1):
+        self.u = u
+        self.zc = zc
+        self.zs = zs
 
-        self.lb = 1
-        self.l = 1
-        self.debye = 0.1
+        protein_data = sl.get_the_charge(seqname)
+        self.seqname = seqname
+        self.sigma = protein_data[0]
+        self.N = protein_data[1]
+        self.sequence = protein_data[2]
 
-        self.zs = 1
-        self.zc = 1
-        self.v2 = 1
+        self.nt = 100
 
-        # res_list gives other info also !
-        seq_data = seq_list.get_the_charge('Ddx4_N1_m')
-        # seq_data = seq_list.get_the_charge('alt_DdX4')
-        self.sigmas = seq_data[0]
-        self.N = seq_data[1]
+        self.eh, self.es = 0, 0
+        self.phiTop, self.phiBot = phiTop, phiBot
+        self.phisTop, self.phisBot = phisTop, phisBot
+        self.pp = self.get_phis()
 
-        self.phi_m = phi_m
-        self.phi_c = phi_m * np.abs(np.sum(self.sigmas)) / self.N
-        self.phi_s = 0
-        # Assuming r_i = 0 for all i
-        self.phi_w = 1 - self.phi_m - self.phi_c - self.phi_s
+        self.HP = self.Heteropolymer(self.sigma)
 
-    def s(self):
-        phi_m = self.phi_m
-        phi_s = self.phi_s
-        phi_c = self.phi_c
-        phi_w = 1 - phi_m - phi_s - phi_c
-        # s = phi_m/self.N*log(phi_m) + phi_s*log(phi_s) + phi_c*log(phi_c) + phi_w*log(phi_w)
-        s = phi_m/self.N*log(phi_m) + phi_c*log(phi_c) + phi_w*log(phi_w)
-        s = -s
-        return s
+        # Minimization helpers
+        self.phi_min_calc = 1e-12
+        self.invT = 1e4
 
-    def fp(self):
-        l = self.l
-        x = self.get_x()
-        phi_m = self.phi_m
-
-        def integrand(k):
-            ntg = 1 + phi_m*((self.xi(k, x)/self.nu(k))+self.v2*self.g(k,x))
-            ntg += self.v2/self.nu(k)*phi_m**2*(self.xi(k, x)*self.g(k, x)-self.zeta(k, x)**2)
-            return ntg
-
-        int_res = integrate.quad(integrand, 0, np.inf, limit=100)
-
-        result = l**3/2/(2*pi)**3*int_res[0]
-        return result
-
-    def fion(self):
-        k = self.debye
-        l = self.l
-        f = log(1 + k*l)-k*l+0.5*(k*l)**2
-        f /= -4*pi
-        return f
-
-    def f0(self):
-        phi_m = self.phi_m
-        v2 = self.v2
-        f = 0.5*v2*phi_m**2
-        return f
-
-    def f(self, phi_m):
-        self.phi_m = phi_m
-        s = self.s()
-        f_ion = self.fion()
-        f_p = self.fp()
-        f_0 = self.f0()
-        return -s + f_p + f_ion + f_0
-
-    def get_x(self):
-        phi_m = self.phi_m
-        N = self.N
-        l = self.l
-
-        def delta(k, x):
-            one_four = (self.nu(k) + phi_m*self.xi(k,x)) * (1/self.v2 + phi_m*self.g(k, x))
-            two_three = (phi_m * self.xi(k,x))**2
-            return one_four - two_three
-
-        def int_xi(k,x):
-            xi1 = self.xi(k,x,hat=True) / self.v2
-            xi2 = self.nu(k)*self.g(k,x, hat=True)
-            xi3 = phi_m*(self.xi(k,x,hat=True) * self.g(k,x) + self.xi(k,x) * self.g(k,x, hat=True) - 2*self.xi(k,x)*self.xi(k,x,hat=True))
-            return xi1 + xi2 + xi3
-
-        def integrand(k, x):
-            return k**2*int_xi(k, x)/(2*pi)**3/delta(k,x)
-
-        def eq_min(x):
-            integral = integrate.quad(integrand, 0, np.inf, limit=100, args=x)[0]*2
-            integral *= N*l**2/(18*(N-1))
-            return 1 - 1/x - integral
-
-        min = sco.fsolve(eq_min,x0=1)
-        return min[0]
-
-    def nu(self, k):
-        zs = self.zs
+    def Heteropolymer(self, w2=4 * pi / 3, wd=1 / 6, FH_funs=None):
+        sigma = self.sigma
         zc = self.zc
-        phi_s = self.phi_s
-        phi_c = self.phi_c
-        nu1 = k**2/(4*pi*self.lb)
-        nu2 = zs**2*phi_s + zc**2*phi_c
-        return nu1 + nu2
+        zs = self.zs
 
-    def xi(self, k, x, hat=False):
-        xi = 0
-        l = self.l
-        for tau, sigma_i in enumerate(self.sigmas):
-            for mu, sigma_j in enumerate(self.sigmas):
-                gauss = exp(-(k * l) ** 2 * x * abs(tau - mu) / 6)
-                if hat:
-                    gauss = gauss * abs(tau-mu)**2
-                xi += sigma_i * gauss * sigma_j
-        return xi/self.N
+        sig = np.array(sigma)
+        N = sig.shape[0]
+        pc = np.abs(np.sum(sig) / N)
+        Q = np.sum(sig * sig) / N
+        IN = np.eye(N)
 
-    def zeta(self, k, x, hat=False):
-        l = self.l
-        zeta = 0
-        for tau, sigma_i in enumerate(self.sigmas):
-            for mu, sigma_j in enumerate(np.ones_like(self.sigmas)):
-                gauss = exp(-(k * l) ** 2 * x * abs(tau - mu) / 6)
-                if hat:
-                    gauss = gauss * abs(tau-mu)**2
-                zeta += sigma_i * gauss * sigma_j
-        return zeta / self.N
+        mel = np.kron(sig, sig).reshape((N, N))
+        Tel = np.array([np.sum(mel.diagonal(n) + mel.diagonal(-n)) for n in range(N)])
+        Tel[0] /= 2
+        Tex = 2 * np.arange(N, 0, -1)
+        Tex[0] /= 2
+        mlx = np.kron(sig, np.ones(N)).reshape((N, N))
+        Tlx = np.array([np.sum(mlx.diagonal(n) + mlx.diagonal(-n)) for n in range(N)])
+        Tlx[0] /= 2
 
-    def g(self, k, x, hat=False):
-        g = 0
-        l = self.l
-        for tau, sigma_i in enumerate(np.ones_like(self.sigmas)):
-            for mu, sigma_j in enumerate(np.ones_like(self.sigmas)):
-                gauss = exp(-(k * l) ** 2 * x * abs(tau - mu) / 6)
-                if hat:
-                    gauss = gauss * abs(tau-mu)**2
-                g += sigma_i * gauss * sigma_j
-        return g / self.N
+        L = np.arange(N)
+        L2 = L * L
+
+        HP = {'sig': sig,
+              'zs': zs,
+              'zc': zc,
+              'w2': w2,
+              'wd': wd,
+              'N': N,
+              'pc': pc,
+              'Q': Q,
+              'IN': IN,
+              'L': L,
+              'L2': L2,
+              'Tel': Tel,
+              'Tex': Tex,
+              'Tlx': Tlx
+              }
+
+        # Default is a Flory-Huggins model
+        eh, es = self.eh, self.es
+        if FH_funs is None:
+            HP['FH'] = lambda phi, u: (w2 / 2 - eh * u - es) * phi * phi
+            HP['dFH'] = lambda phi, u: (w2 - 2 * eh * u - 2 * es) * phi
+            HP['ddFH'] = lambda phi, u: (w2 - 2 * eh * u - 2 * es)
+        else:
+            HP['FH'] = lambda phi, u: FH_fun[0](phi, u) + w2 / 2 * phi * phi
+            HP['dFH'] = lambda phi, u: FH_fun[1](phi, u) + w2 * phi
+            HP['ddFH'] = lambda phi, u: FH_fun[2](phi, u) + w2
+
+        return HP
+
+    def run(self):
+        # pool = mp.Pool(processes=2)
+        # phi0, phis0, phia, phisa, phib, phisb, v = zip(*pool.map(self.salt_parallel, self.pp))
+        phi0, phis0, phia, phisa, phib, phisb, v = zip(*map(self.salt_parallel, self.pp))
+        # phi0, phis0, phia, phisa, phib, phisb, v = self.salt_parallel(self.pp)
+        output = np.zeros((self.pp.shape[0], 7))
+
+        output[:, 0] = np.array(phi0)
+        output[:, 1] = np.array(phis0)
+        output[:, 2] = np.array(phia)
+        output[:, 3] = np.array(phisa)
+        output[:, 4] = np.array(phib)
+        output[:, 5] = np.array(phisb)
+        output[:, 6] = np.array(v)
+
+        head = ' u=' + str(self.u) + ' , phiTop=' + str(self.phiTop) + ' , phisTop=' + str(self.phisTop) + \
+               ' , phiBot=' + str(self.phiBot) + ' , phisBot=' + str(self.phisBot) + '\n' + \
+               '  [phiori, phisori]  [phia, phisa]  [phib, phisb], v \n' + \
+               '--------------------------------------------------------------------------------------------'
+        fname = 'saltdept_zc' + str(self.HP['zc']) + '_zs' + str(self.HP['zs']) + '_' \
+                   + self.seqname + '_u' + str(self.u) + '_w2_4.189.txt'
+        np.savetxt(fname, output, header=head)
+        print(head)
+        print(output)
+        print(f"Saving to {fname}")
+
+    def salt_parallel(self, p):
+        # try:
+        x = self.bisolve(p)
+        return p[0], p[1], x[0], x[1], x[2], x[3], x[4]
+        # except:
+        #     for test in range(5):
+        #         p[0] = p[0] * (0.95 + 0.1 * np.random.rand())
+        #         try:
+        #             x = self.bisolve(p)
+        #             print(p, x)
+        #             return p[0], p[1], x[0], x[1], x[2], x[3], x[4]
+        #         except:
+        #             pass
+        #     return p[0], p[1], -1, -1, -1, -1, -1
+
+    def bisolve(self, phiPS_ori):
+        r_vini1 = 0.5
+        phiall = self.ps_bi_solve(phiPS_ori, r_vini1, 1)
+        phi_test = np.array(phiall)
+        try_max = 20
+        try_i = 0
+        while np.isnan(sum(phi_test)) \
+                and np.array(np.where(((0 < phi_test) & (phi_test < 1)))).size != 4 \
+                and try_i <= try_max:
+            phiall = self.ps_bi_solve(phiPS_ori, np.random.rand(), 1)
+            phi_test = np.array(phiall)
+            try_i = try_i + 1
+            # print(try_i)
+        return phiall
+
+    def ps_bi_solve(self, phiPS_ori, r_vini, useJ):
+
+        # Constraint functions
+        # 0 < phia < 1
+        # 0 < phisa < 1
+        # 0 < phib < 1   : v < phiori/phia   && v < (1-phiori)/(1-phia)
+        # 0 < phisb < 1  : v < phisori/phisa && v < (1-phisori)/(1-phisa)
+        # phia+phisa < 1
+        # phib+phisb < 1 : v < (1-phiori-phisori)/(1-phia-phisa)
+        # 0 < v < 1
+        def vmin(phiPS_a_v, phiPS_ori):
+            phiori = phiPS_ori[0]
+            phisori = phiPS_ori[1]
+
+            phia = phiPS_a_v[0]
+            phisa = phiPS_a_v[1]
+            # v     = phi_12_a_v[2]
+
+            return min(1, phiori / phia, (1 - phiori) / (1 - phia),
+                       phisori / phisa, (1 - phisori) / (1 - phisa),
+                       (1 - phiori - phisori) / (1 - phia - phisa))
+
+        err = self.phi_min_calc
+
+        phiori = phiPS_ori[0]
+        phisori = phiPS_ori[1]
+
+        print(phiori, phisori)
+        f0 = ff.f_eng(self.HP, phiori, phisori, self.u)
+
+        phi_ini = [phiori * 0.5, phisori * 0.95]
+
+        vini = [r_vini * vmin(phi_ini, phiPS_ori)]
+        inis = phi_ini + vini
+
+        cons_all = ({'type': 'ineq', 'fun': lambda x: x[0] - err},
+                    {'type': 'ineq', 'fun': lambda x: 1 - x[0] - err},
+                    {'type': 'ineq', 'fun': lambda x: x[1] - err},
+                    {'type': 'ineq', 'fun': lambda x: 1 - x[1] - err},
+                    {'type': 'ineq', 'fun': lambda x: 1 - x[0] - x[1] - err},
+                    {'type': 'ineq', 'fun': lambda x: x[2] - err},
+                    {'type': 'ineq', 'fun': lambda x: vmin(x, phiPS_ori) - x[2] - err})
+
+        if useJ:
+            result = sco.minimize(ff.f_total_v, inis,
+                                  args=(HP, u, phiPS_ori, f0),
+                                  method='SLSQP',
+                                  jac=self.J_f_total_v,
+                                  constraints=cons_all,
+                                  tol=err / 100,
+                                  options={'ftol': err, 'eps': err})
+        else:
+            result = sco.minimize(ff.f_total_v, inis,
+                                  args=(HP, u, phiPS_ori, f0),
+                                  method='COBYLA',
+                                  constraints=cons_all,
+                                  tol=err / 100)
+
+        phia = result.x[0]
+        phisa = result.x[1]
+        v = result.x[2]
+        phib = (phiori - v * phia) / (1 - v)
+        phisb = (phisori - v * phisa) / (1 - v)
+        if phia > phib:
+            t1, t2 = phib, phisb
+            phib, phisb = phia, phisa
+            phia, phisa = t1, t2
+            v = 1 - v
+
+        return [phia, phisa, phib, phisb, v]
+
+    def get_phis(self):
+        nt = self.nt
+        phiTop = self.phiTop
+        phisTop = self.phisTop
+        phiBot = self.phiBot
+        phisBot = self.phisBot
+        if phiBot is not None and phisBot is not None:
+            phiall = np.linspace(phiBot + (phiTop - phiBot) * 0.001, phiTop - (phiTop - phiBot) * 0.001, nt)
+            phisall = np.linspace(phisBot + (phisTop - phisBot) * 0.001, phisTop - (phisTop - phisBot) * 0.001, nt)
+        else:
+            phiall = np.linspace(0.1, phiTop, nt)
+            phisall = np.linspace(phisTop * 0.01, phisTop * 0.999, nt)
+        pp = np.array([[phiall[i], phisall[i]] for i in range(nt)])
+        return pp
+
+    def J_f_total_v(self, phiPS_a_v, phiPS_ori, f0=0):
+        HP = self.HP
+        u = self.u
+
+        phiori = phiPS_ori[0]
+        phisori = phiPS_ori[1]
+
+        phia = phiPS_a_v[0]
+        phisa = phiPS_a_v[1]
+        v = phiPS_a_v[2]
+        phib = (phiori - v * phia) / (1 - v)
+        phisb = (phisori - v * phisa) / (1 - v)
+
+        xeffa = tt.x_eff(HP, phia, phisa, u)
+        fa = tt.f_eng(HP, phia, phisa, u, x=xeffa)
+        dfa, dfsa = tt.df_eng(HP, phia, phisa, u, x=xeffa)
+
+        xeffb = tt.x_eff(HP, phib, phisb, u)
+        fb = tt.f_eng(HP, phib, phisb, u, x=xeffb)
+        dfb, dfsb = tt.df_eng(HP, phib, phisb, u, x=xeffb)
+
+        J = np.empty(3)
+        J[0] = v * (dfa - dfb)
+        J[1] = v * (dfsa - dfsb)
+        J[2] = fa - fb + (phib - phia) * dfb + (phisb - phisa) * dfsb
+
+        return self.invT * J
 
 
+    # CURRENTLY UNUSED ?
+    # -------------------- Solve protein-salt spinodal boundary --------------------
+
+    # Critical point calculation
+    def cri_salt(HP, u, pl, pu, pmid=None, psl=None, psu=None, thesign=-1):
+        dp = pu - pl
+        if pmid == None:
+            pmid = (pl + pu) / 2
+
+        result = sco.brent(cri_phis_solve, args=(u, HP, psl, psu, thesign),
+                           brack=(pl, pmid, pu),
+                           full_output=1)
+        phi_top, phis_top = result[0], thesign * result[1]
+        return phi_top, phis_top
+
+    def cri_phis_solve(phi, u, HP, psl, psu, thesign):
+        phismax = (HP['zc'] - (HP['zc'] + HP['pc']) * phi) / (HP['zc'] + HP['zs'])
+        if psl == None:
+            psl = 1e-6
+        if psu == None:
+            psu = phismax * 0.9999
+
+        return thesign * sco.brenth(ddf_phis, psl, psu, args=(phi, u, HP))
+
+    def ddf_phis(phis, phi, u, HP):
+        ddf = tt.ddf_eng(HP, phi, phis, u)[3]
+        print(phi, phis, ddf, flush=True)
+        return ddf
