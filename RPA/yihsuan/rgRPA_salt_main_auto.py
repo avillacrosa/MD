@@ -56,7 +56,7 @@ else:
     phisall = np.linspace(phisTop*0.01, phisTop*0.999, nt) 
         
 phisall
-pp = np.array([[phiall[i], phisall[i]] for i in range(nt)])
+pp = np.array([ [phiall[i], phisall[i]] for i in range(nt)])
 
 
 #-------------------- Parallel calculate (phi, phis) --------------------
@@ -99,4 +99,4 @@ head = ' u=' + str(u) + ' , phiTop=' + str(phiTop) + ' , phisTop=' + str(phisTop
 np.savetxt('saltdept_zc' + str(HP['zc']) + '_zs' +  str(HP['zs']) + '_' \
            + seqname + '_u' + str(u) + '_w2_4.189.txt',output,header=head)
 
-
+   

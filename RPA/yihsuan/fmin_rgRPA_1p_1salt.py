@@ -48,7 +48,7 @@ def cri_calc( HP, phis=0, ini1=1e-4, ini3=1e-1, ini2=2e-1 ):
                 ini3 = (ini1+ini3)/2
               
         u3   = cri_u_solve(ini3, 0, HP)
-
+    print("PHIS", phis, (ini1, ini3, ini2))
     result = sco.brent(cri_u_solve, args = (HP,phis), \
                        brack= (ini1, ini3, ini2), \
                        full_output=1 )

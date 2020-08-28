@@ -10,8 +10,6 @@
 # - Calculating 2D phase diagram for 
 #   protein-salt solution
 
-###########OLD###################
-
 
 import sys
 import time

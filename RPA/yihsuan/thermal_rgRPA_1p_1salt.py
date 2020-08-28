@@ -268,7 +268,6 @@ def x_RG_to_int(k, HP, phi, phis, u, x):
     g, xi, zeta = G11(HP, k, x), Gcc(HP, k, x), G1c(HP, k, x) 
     A11, A1c, Acc = L2G11(HP,k,x), L2G1c(HP,k,x), L2Gcc(HP,k,x)
     nuu, v = nu(HP,k,phi,phis,u), HP['w2'] 
-
     I = Acc + nuu*v*A11 + phi*v*(g*Acc - 2*zeta*A1c + xi*A11)
     D = vDel(HP,k,phi,phis,u,x)
     return k*k/(2*pi*pi)*k*k*I/D

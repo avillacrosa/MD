@@ -1,0 +1,39 @@
+units       real
+dimension   3
+boundary    p p p
+atom_style  full
+
+bond_style  harmonic
+pair_style  $pair_potential $pair_parameters
+dielectric  $water_perm
+
+read_data   data.data
+
+bond_coeff          1     9.600     3.8
+
+# HPS SCALE $hps_scale
+
+$pair_coeff
+
+special_bonds fene
+neighbor  3.5 multi
+neigh_modify  every 10 delay 0
+
+comm_style    tiled
+timestep      $dt
+
+velocity      all create $temp $v_seed
+fix           fxnve  all nve
+fix           fxlange all langevin $temp $temp $langevin_damp $langevin_seed
+
+compute rg all gyration
+
+thermo        $save
+thermo_style  custom step pe ebond ecoul evdwl c_rg temp spcpu
+thermo_modify flush yes
+
+dump          atom_file all atom $save $lammps_dump
+dump_modify   atom_file flush yes scale no
+
+dump          dcd_file all dcd $save $dcd_dump
+dump_modify   dcd_file flush yes unwrap yes

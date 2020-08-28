@@ -84,14 +84,14 @@ def vmin(phiPS_a_v, phiPS_ori):
 
     return min(1, phiori/phia, (1-phiori)/(1-phia), \
                   phisori/phisa, (1-phisori)/(1-phisa), \
-                  (1-phiori-phisori)/(1-phia-phisa))
+                  (1-phiori-phisori)/(1-phia-phisa)     )   
 
 
-def ps_bi_solve( HP, u, phiPS_ori ,r_vini, useJ ): 
+def ps_bi_solve( HP, u, phiPS_ori ,r_vini, useJ ):
     err = phi_min_calc
 
     phiori = phiPS_ori[0] 
-    phisori = phiPS_ori[1]  
+    phisori = phiPS_ori[1]
 
     f0 = tt.f_eng(HP, phiori, phisori, u)
 
@@ -99,6 +99,7 @@ def ps_bi_solve( HP, u, phiPS_ori ,r_vini, useJ ):
 
     vini = [r_vini*vmin(phi_ini, phiPS_ori)]
     inis = phi_ini + vini
+
 
     #print(inis)
     cons_all = ( {'type':'ineq', 'fun': lambda x:   x[0]-err }, \
@@ -142,7 +143,6 @@ def ps_bi_solve( HP, u, phiPS_ori ,r_vini, useJ ):
 
 
 def bisolve( HP, u, phiPS_ori ):
-
     r_vini1 = 0.5
     phiall = ps_bi_solve( HP, u, phiPS_ori, r_vini1 , 1 )
     phi_test = np.array(phiall)

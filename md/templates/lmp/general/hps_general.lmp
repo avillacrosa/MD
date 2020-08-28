@@ -1,0 +1,2 @@
+restart $restart rst_$temp.1 rst_$temp.2
+run           $t

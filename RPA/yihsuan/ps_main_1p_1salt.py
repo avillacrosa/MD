@@ -24,11 +24,11 @@ gv.eta = 1
 
 
 # convert [Salt] in mM to [Salt]/[H2O]
-phis_mM = 0 
+phis_mM = float(sys.argv[5])
 phis = phis_mM*0.001/(1000./18.)
 
 # ehs must be a 2-element list: the first for entropy and the latter enthalpy
-ehs = [0,0]
+ehs = [float(x) for x in sys.argv[3:5]]
 
 # use  phi-dependent permittivity or not 
 ef = False
@@ -60,7 +60,8 @@ t0 = time.time()
 phi_cri, u_cri = fs.cri_calc(HP, phis)
 
 print('Critical point found in', time.time() - t0 , 's')
-print( 'u_cri =', '{:.8e}'.format(u_cri) , \
+print( 'u_cri =', '{:.4e}'.format(u_cri) , 
+       'T*_cri = {:.4f}'.format(1/u_cri),
        ', phi_cri =','{:.8e}'.format(phi_cri) )
 
 if(cri_calc_end):
@@ -92,7 +93,7 @@ def bisp_parallel(u):
     
     return sp1, sp2, bi1, bi2
 
-pool = mp.Pool(processes=80)
+pool = mp.Pool(processes=4)
 sp1ss, sp2ss, bi1ss, bi2ss = zip(*pool.map(bisp_parallel, uall))
 
 ind_slc = np.where(np.array(bi1ss) > gv.phi_min_sys)[0]
@@ -115,13 +116,10 @@ print(bi_out)
 monosize = str(gv.r_res) + '_' + str(gv.r_con) + '_' + str(gv.r_sal)
 ehs_str = '_'.join(str(x) for x in ehs )
 
-calc_info = '_RPAFH_N' + str(N) + '_phis' + str(phis) + '_' + seq_name + \
-            '_ehs' + ehs_str + '_umax' + str(new_umax) + \
-            '_du' + str(du) + '_ddu' + str(ddu) + \
-            '.txt'
-
-sp_file = '../results/sp' + calc_info
-bi_file = '../results/bi' + calc_info
+calc_info = '_RPAFH_N{}_phis_{:.5f}_{}_eh{:.2f}_es{:.2f}_umax{:.2f}_du{:.2f}_ddu{:.2f}.txt'.format(
+             N, phis, seq_name,ehs[0], ehs[1],new_umax,du,ddu)
+sp_file = './results/sp' + calc_info
+bi_file = './results/bi' + calc_info
 
 print(sp_file)
 print(bi_file)
