@@ -21,11 +21,15 @@ def qi_calc(x):
     return 10 ** x / (1 + 10 ** x)
 
 
-def get_the_charge(seqname, pH=None):
+def get_the_charge(seqname, pH=None, mimics=None):
     the_seq = getattr(polymers, seqname)
+    if mimics is not None:
+        slistt = list(the_seq)
+        for i in mimics:
+            slistt[i] = 'D'
+        the_seq = ''.join(slistt)
     N = len(the_seq)
     sigmai = np.zeros(N)
-
     use_pKa = False if pH == None else True
 
     for i in range(0, N):
@@ -44,7 +48,6 @@ def get_the_charge(seqname, pH=None):
                 sigmai[i] = 1
         else:
             sigmai[i] = 0
-
     return sigmai, N, the_seq
 
 

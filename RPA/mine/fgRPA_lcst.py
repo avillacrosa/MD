@@ -22,11 +22,14 @@ class fgRPA_lcst:
         self.ehs = ehs
         self.umin = umin
         self.parallel = parallel
+        self.mimics = kwargs.get("mimics", None)
 
         protein_data = sl.get_the_charge(seqname, pH=pH)
         self.seqname = seqname
         self.sigma = protein_data[0]
         self.N = protein_data[1]
+        self.name = kwargs.get('name',None)
+        self.cri_only = kwargs.get('cri_only', False)
         self.sequence = protein_data[2]
 
         self.nt = kwargs.get('nt', 100)
@@ -59,8 +62,6 @@ class fgRPA_lcst:
         phis = self.phis
         umin = self.umin
 
-        du = 0.1
-
         print('Seq:', seqname, '=', sequence, '\nphi_s=', phis,
               'r_res =', self.r_res, ', r_con =', self.r_con,
               ', r_sal =', self.r_sal, ', eta =', self.eta,
@@ -70,6 +71,12 @@ class fgRPA_lcst:
 
         # critical_point
         phi_cri, u_cri = self.cri_calc()
+        if self.cri_only:
+            sp_file = '/home/adria/perdiux/prod/lammps/final/RPA/fg_ucst/c_only_' + self.name + '.txt'
+            print(f"Saving criticial point only at {sp_file}")
+            with open(sp_file, 'a+') as fin:
+                fin.write(f"{phi_cri} {u_cri} {self.mimics} \n")
+            return
 
         print('Critical point found in', time.time() - t0, 's')
         print('u_cri =', '{:.4e}'.format(u_cri),
@@ -78,13 +85,21 @@ class fgRPA_lcst:
         if umin is None:
             sys.exit()
         # ============================ Set up u range =============================
+        # ddu = du / 10
+        # umax = (np.ceil(u_cri / ddu) - 1) * ddu
+        # uclose = (np.ceil(u_cri / du) - 2) * du
+        #
+        # if umin > u_cri:
+        #     umin = u_cri / 1.5
+        # if uclose < umin:
+        #     uclose = umin
+
+        umax = u_cri * 1.5
+        hel = np.linspace(u_cri, umax, 10)
+        du = hel[1] - hel[0]
         ddu = du / 10
-        umax = (np.ceil(u_cri / ddu) - 1) * ddu
-        uclose = (np.ceil(u_cri / du) - 2) * du
-        if umin > u_cri:
-            umin = u_cri / 1.5
-        if uclose < umin:
-            uclose = umin
+        umin = (np.floor(u_cri / ddu) + 1) * ddu
+        uclose = (np.floor(u_cri / du) + 2) * du
 
         uall = np.append(np.arange(umax, uclose, -ddu), np.arange(uclose, umin - du, -du))
 
@@ -141,8 +156,12 @@ class fgRPA_lcst:
         calc_info = '_RPAFH_N{}_phis_{:.5f}_{}_eh{:.2f}_es{:.2f}_umax{:.2f}_du{:.2f}_ddu{:.2f}.txt'.format(
             N, phis, seqname, ehs[0], ehs[1], new_umax, du, ddu)
 
-        sp_file = '/home/adria/perdiux/prod/lammps/final/RPA/fg_lcst/sp' + calc_info
-        bi_file = '/home/adria/perdiux/prod/lammps/final/RPA/fg_lcst/bi' + calc_info
+        if self.name is None:
+            sp_file = '/home/adria/perdiux/prod/lammps/final/RPA/rg_ucst/sp' + calc_info
+            bi_file = '/home/adria/perdiux/prod/lammps/final/RPA/rg_ucst/bi' + calc_info
+        else:
+            sp_file = '/home/adria/perdiux/prod/lammps/final/RPA/rg_ucst/sp_' + self.name + '.txt'
+            bi_file = '/home/adria/perdiux/prod/lammps/final/RPA/rg_ucst/bi_' + self.name + '.txt'
 
         print(sp_file)
         print(bi_file)

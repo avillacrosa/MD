@@ -25,7 +25,7 @@ import scipy.integrate as sci
 from numpy import pi
 
 useleff = True
-intMax = 200
+intMax = 400
 phi_min_calc = 1e-12
 
 eh, es = 0, 0

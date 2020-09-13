@@ -84,12 +84,12 @@ for i in range(len(particle_types)):
             qiqj = 0.
         else:
             cutoff = 3.5
-            qiqj = qi*qj/(4*math.pi*cnt.epsilon_0*80)
+            qiqj = qi*qj/(4*math.pi*cnt.epsilon_0*water_perm)
             qiqj *= 10**-3*cnt.Avogadro*10**9
         yukawa.pair_coeff.set(aa_i, aa_j, kappa=$debye, epsilon=qiqj, r_cut=cutoff, r_on=cutoff)
 
 
-hoomd.analyze.log(filename=f"log_{temperature:.0f}.log", quantities=['potential_energy', 'bond_harmonic_energy', 'pair_yukawa_energy', 'pair_table_energy', 'lx', 'ly', 'lz'], period=$save, overwrite=True)
+hoomd.analyze.log(filename=f"log_{temperature:.0f}.log", quantities=['potential_energy', 'bond_harmonic_energy', 'pair_yukawa_energy', 'pair_table_energy', 'temperature', 'lx', 'ly', 'lz'], period=$save, overwrite=True)
 hoomd.dump.gsd(filename=f"trajectory_{temperature:.0f}.gsd", period=$save, group=hoomd.group.all(), overwrite=True)
 hoomd.dump.dcd(filename=f"trajectory_{temperature:.0f}.dcd", period=$save, group=hoomd.group.all(), overwrite=True, unwrap_full=True)
 

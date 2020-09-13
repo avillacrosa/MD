@@ -9,7 +9,7 @@ import sys
 
 
 class rgRPA_ucst:
-    def __init__(self, seqname, find_cri, phis, eh, es, umax, fgRPA=False, pH=None, parallel=False, **kwargs):
+    def __init__(self, seqname, find_cri, phis, eh, es, umax, eps0=80, fgRPA=False, pH=None, parallel=False, **kwargs):
         self.zc = kwargs.get('zc', 1)
         self.zs = kwargs.get('zs', 1)
         self.find_cri = find_cri
@@ -19,6 +19,10 @@ class rgRPA_ucst:
         self.wtwo_ratio = kwargs.get('wtwo_ratio', None)
         self.parallel = parallel
         self.umax = umax
+        self.name = kwargs.get('name', None)
+        self.cri_only = kwargs.get('cri_only', False)
+        self.mimics = kwargs.get("mimics", None)
+        self.eps0=eps0
 
         protein_data = sl.get_the_charge(seqname, pH=pH)
         self.seqname = seqname
@@ -39,7 +43,6 @@ class rgRPA_ucst:
         phis = self.phis
         ff.eh = self.eh
         ff.es = self.es
-        umax = self.umax
 
         duD = int(2)
         du = 10 ** (-duD)
@@ -64,7 +67,7 @@ class rgRPA_ucst:
         t0 = time.time()
         phi_cri, u_cri = self.cri_calc()
         print('Critical point found in', time.time() - t0, 's')
-
+        umax = u_cri * 1.5
         print('u_cri =', '{:.8e}'.format(u_cri), ', phi_cri =', '{:.8e}'.format(phi_cri))
         if umax is None:
             sys.exit()
@@ -125,8 +128,12 @@ class rgRPA_ucst:
                     '_du' + str(du) + '_ddu' + str(ddu) + \
                     '.txt'
 
-        sp_file = '../results/sp_' + calc_info
-        bi_file = '../results/bi_' + calc_info
+        if self.name is None:
+            sp_file = '/home/adria/perdiux/prod/lammps/final/RPA/rg_ucst/sp' + calc_info
+            bi_file = '/home/adria/perdiux/prod/lammps/final/RPA/rg_ucst/bi' + calc_info
+        else:
+            sp_file = '/home/adria/perdiux/prod/lammps/final/RPA/rg_ucst/sp_' + self.name + '.txt'
+            bi_file = '/home/adria/perdiux/prod/lammps/final/RPA/rg_ucst/bi_' + self.name + '.txt'
 
         print(sp_file)
         print(bi_file)

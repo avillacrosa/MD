@@ -456,6 +456,43 @@ class LMPSetup:
         with open('/home/adria/scripts/data/hps/asyn_coeffs.txt', 'w+') as coeff_data:
             coeff_data.write(d)
 
+    def get_lambda_seq(self, window=9):
+        """
+        Get the windowed charged sequence of the sequence
+        :param window: int window to calculate the charge
+        :return: ndarray windowed charge of the sequence, ndarray of positive values, ndarray of negative values
+        """
+        self._get_hps_params(temp=300)
+        win = np.zeros(len(self.sequence))
+        rr = int((window-1)/2)
+        if rr >= 0:
+            for i in range(len(self.sequence)):
+                c = 0
+                for w in range(-rr, rr+1):
+                    if len(self.sequence) > i+w > 0:
+                        jaa = self.sequence[i+w]
+                        c += 1
+                        win[i] += self.residue_dict[jaa]["lambda"]
+                    else:
+                        continue
+                win[i] /= window
+                # win[i] += self.residue_dict[jaa]["q"]
+        else:
+            for i in range(len(self.sequence)):
+                for j in range(-rr, rr+1):
+                    if len(self.sequence) > i+j > 0:
+                        jaa = self.sequence[i+j]
+                        win[i] += self.residue_dict[jaa]["lambda"]
+                        #CORRECTOR
+                        # if 1 > abs(self.residue_dict[jaa]["q"]) > 0:
+                        #     win[i] += 1 - self.residue_dict[jaa]["q"]
+                win[i] /= window
+        plus = np.copy(win)
+        minus = np.copy(win)
+        plus[plus < 0.] = 0
+        minus[minus > 0.] = 0
+        return win, plus, minus
+
     # TODO : BROKEN
     def get_correlation_time(self):
         """
@@ -570,7 +607,7 @@ class LMPSetup:
                 helper = []
                 for c in range(self.chains):
                     d = np.array(self.fix_region)
-                    d = d * (c + 1)
+                    d = d + len(self.sequence)*c
                     helper.append(f'{d[0]:.0f}:{d[1]:.0f}')
                 helper = ' '.join(helper)
                 self.lmp_file_dict["fix_group"] = helper
@@ -824,13 +861,13 @@ class LMPSetup:
         if self.temper:
             if self.processors == 1:
                 self.qsub_file_dict[
-                    "command"] = f"/home/adria/local/lammps/bin/lmp -in lmp{T}.lmp"
+                    "command"] = f"/home/adria/local/lammps3/bin/lmp -in lmp{T}.lmp"
             else:
                 self.qsub_file_dict[
-                    "command"] = f"/home/ramon/local/openmpi/202_gcc630/bin/mpirun -np {self.processors} /home/adria/local/lammps/bin/lmp -partition {self.processors}x1 -in lmp.lmp"
+                    "command"] = f"/home/ramon/local/openmpi/202_gcc630/bin/mpirun -np {self.processors} /home/adria/local/lammps3/bin/lmp -partition {self.processors}x1 -in lmp.lmp"
         else:
             self.qsub_file_dict[
-                "command"] = f"/home/ramon/local/openmpi/202_gcc630/bin/mpirun -np {self.processors} /home/adria/local/lammps/bin/lmp -in lmp{T}.lmp -log log_{T}.lammps"
+                "command"] = f"/home/ramon/local/openmpi/202_gcc630/bin/mpirun -np {self.processors} /home/adria/local/lammps3/bin/lmp -in lmp{T}.lmp -log log_{T}.lammps"
         self.qsub_file_dict["np"] = self.processors
         self.qsub_file_dict["host"] = self.host
         self.qsub_file_dict["jobname"] = self.job_name
@@ -847,6 +884,7 @@ class LMPSetup:
         self.slurm_file_dict["np"] = self.processors
         self.slurm_file_dict["jobname"] = self.job_name
         self.slurm_file_dict["in_files"] = f"data.data lmp{T}.lmp"
+        self.slurm_file_dict["temp"] = T
 
     def _generate_README(self):
         """

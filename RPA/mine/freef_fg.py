@@ -34,66 +34,12 @@ import global_vars as gv
 NoSelfEnergy = True  # Ture if electrostatic self energy is subtracted
 
 Gamma = 0  # Short-range cutoff factor
-intlim = 200
+intlim = 400
 
 
 # function for calculating entropy
 def s_calc(x):
     return (x > gv.phi_min_sys) * x * np.log(x + (x < gv.phi_min_sys))
-
-
-# ========================= Thermodynamic functions =========================
-
-# RPAFH returns a dict HP, which includes basic information of the protein
-# and the model parameters
-#
-# epsfun=False   : constant permittivity
-# epsfun=True    : linear phi-dependent permittivity, eps_a, eps_b are used
-# eps_modify_ehs : Ture if using eps_r=eps0 to rescale ehs
-#                  (assuming the input ehs is of eps_r=1)
-def RPAFH(sig, ehs=[0, 0], epsfun=False, eps_modify_ehs=False,
-          eps_a=18.931087269965023,
-          eps_b=84.51003476887941):
-    # sequence parameters
-    sig = np.array(sig)  # charge pattern
-    N = sig.shape[0]  # sequence length
-    pc = np.abs(np.sum(sig)) / N  # prefactor for counterions
-    Q = np.sum(sig * sig) / N  # fraction of charged residues (sig=+/-1)
-
-    # linear summation for S(k)
-    mel = np.kron(sig, sig).reshape((N, N))
-    Tel = np.array([np.sum(mel.diagonal(n) + mel.diagonal(-n)) for n in range(N)])
-    Tel[0] /= 2
-    L = np.arange(N)
-
-    HP = {'sig': sig, \
-          'N': N, \
-          'pc': pc, \
-          'Q': Q, \
-          'L': L, \
-          'Tel': Tel, \
-          'ehs': ehs \
-          }
-
-    if epsfun:
-        a, b = eps_a, eps_b
-        HP['eps0'] = b
-        flinear = lambda x: a * x + b * (1 - x)
-        HP['epsx'] = lambda x: b / flinear(x)
-        HP['depsx'] = lambda x: -b * (a - b) / (flinear(x)) ** 2
-        HP['ddepsx'] = lambda x: 2 * b * (a - b) * (a - b) / (flinear(x)) ** 3
-    else:
-        HP['eps0'] = 1
-        HP['epsx'] = lambda x: 1 * (x == x)
-        HP['depsx'] = lambda x: 0 * x
-        HP['ddepsx'] = lambda x: 0 * x
-
-        # using eps_r=eps0 to rescale ehs (assuming the input ehs is of eps_r=1)
-    if eps_modify_ehs:
-        ehs[0] *= HP['eps0']
-
-    return HP
-
 
 # entropy
 def Enp(HP, phi, phis):

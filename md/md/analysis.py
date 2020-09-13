@@ -31,7 +31,6 @@ class Analysis:
     """
 
     def __init__(self, framework):
-        self.chain_atoms = None
         self.c_rg = None
         self.framework = framework
 
@@ -77,16 +76,17 @@ class Analysis:
         intra_maps = []
         if temperature is None:
             temp_range = range(len(self.temperatures))
+        elif len(temperature) > 1:
+            temp_range = temperature
         else:
             temp_range = [temperature]
         for T in temp_range:
             struct = self.structures[T]
             coords = struct.xyz
             contacts_frame = np.zeros(shape=(coords.shape[1], coords.shape[1]))
-            # contacts_frame = np.empty(shape=(coords.shape[1], coords.shape[1]))
-            n_frames = 100
+            n_frames = struct.n_frames
             for frame in range(n_frames):
-                print(f"Doing frame : {frame}/{n_frames}", end='\r')
+                # print(f"Doing frame : {frame}/{n_frames}", end='\r')
                 cf = coords[-frame, :, :]
                 contacts_frame += mda.distances.contact_matrix(cf, cutoff=contact_cutoff)
             contacts_frame /= n_frames
@@ -121,7 +121,7 @@ class Analysis:
                     aa_map[i, j] /= counter[i]*counter[j]
         return aa_map
 
-    def intra_distance_map(self, contacts=False, temperature=None):
+    def intra_distance_map(self, contacts=False, temperature=None, normed=False):
         """
         Calculate intrachain distances using MDTraj
         :param contacts: bool, compute contacts instead of distances
@@ -130,6 +130,12 @@ class Analysis:
         """
         structures = self.structures.copy()
         contact_maps = []
+        if normed:
+            d = np.zeros(shape=(448, 448))
+            for i in range(448):
+                for j in range(i, 448):
+                    d[i][j] = 1.12 * abs(i - j) ** 0.5
+                    d[j][i] = d[i][j]
         if temperature is not None:
             structures = [structures[temperature]]
         for traj in structures:
@@ -141,8 +147,12 @@ class Analysis:
             contact_map = d
             if contacts:
                 contact_map = mda.contacts.contact_matrix(contact_map, radius=6)
+            if normed:
+                contact_map -= d
             contact_maps.append(contact_map)
-        return np.array(contact_maps)
+        if self.low_mem:
+            self.structures = None
+        return np.array(contact_maps, dtype='float32')
 
     def async_inter_distance_map(self, contacts=False, temperature=None):
         print("PARALLEL CALC")
@@ -322,14 +332,54 @@ class Analysis:
             prefactor = prefactor**0.5
             return rg - prefactor*b*N**nu
 
-        rg = self.rg()[0]
+        self.rg()
+        rg = self.c_rg[0]
         nus = []
         for T in range(len(self.temperatures)):
             ret = fsolve(rg_f, x0=0.5, args=rg[T])
             nus.append(ret[0])
         return nus
 
-    def pair_potential(self, aminoacid, model='HPS'):
+    def pair_energies(self, model='HPS'):
+        def HPS_potential(r, eps, lambd, sigma):
+            V = 4 * eps * ((sigma / r) ** 12 - (sigma / r) ** 6)
+            if r <= 2**(1/6)*sigma:
+                V += (1-lambd)*eps
+            else:
+                V *= lambd
+            return V
+
+        def KH_potential(r, eps, sigma):
+            V = 4 * eps * ((sigma / r) ** 12 - (sigma / r) ** 6)
+            if r <= 2 ** (1 / 6) * sigma:
+                V += 2 * eps
+            else:
+                V *= -1
+            return V
+
+        self._get_hps_params()
+        df = pd.DataFrame(index=self.residue_dict.keys(), columns=self.residue_dict.keys())
+        for aa1 in self.residue_dict:
+            for aa2 in self.residue_dict:
+                sigma = (self.residue_dict[aa1]["sigma"]+self.residue_dict[aa2]["sigma"])/2
+                lambd = (self.residue_dict[aa1]["lambda"]+self.residue_dict[aa2]["lambda"])/2
+                if model == 'KH':
+                    ks = pd.read_csv('/home/adria/scripts/data/hps/kh.dat', sep=" ", index_col=0)
+                    eps_ij = ks[aa1][aa2]
+                    kh_alpha = 0.228
+                    kh_eps0 = -1
+                    epss = eps_ij / kh_alpha + kh_eps0
+                    if epss <= kh_eps0:
+                        lambd = 1
+                    else:
+                        lambd = -1
+                    eps_ij = abs(eps_ij)
+                    df[aa1][aa2] = HPS_potential(2**(1/6)*sigma, eps_ij, lambd, sigma)
+                else:
+                    df[aa1][aa2] = HPS_potential(2**(1/6)*sigma, 0.2, lambd, sigma)
+        return df
+
+    def pair_potential(self, aminoacid, model='HPS', energies=False):
         """
         Utility for getting the HPS potential for the given current parameters for plotting
         :return:
@@ -357,7 +407,7 @@ class Analysis:
         if model=='HPS':
             lambd = self.residue_dict[aa]["lambda"]
             sigma = self.residue_dict[aa]["sigma"]
-            return r, HPS_potential(r,0.2,lambd, sigma)
+            return r, HPS_potential(np.array([2**(1/6)*sigma]), 0.2, lambd, sigma)
         if model=='KH':
             ks = pd.read_csv('/home/adria/scripts/data/hps/kh.dat', sep=" ", index_col=0)
             eps_ij = ks[aa][aa]
@@ -421,6 +471,8 @@ class Analysis:
         :param full: whether we want rg for every frame or its average
         :return: ndarray[T,frames], rg's
         """
+        if self.c_rg is not None:
+            return self.c_rg
         rgs, err = [], []
         if use == 'lmp':
             if self.chains != 1:
@@ -462,10 +514,14 @@ class Analysis:
             np.savetxt(path, np.array([np.array(rgs), np.array(err)]))
         return np.array(rgs), np.array(err)
 
-    def phospho_rew(self, T,  savefile, iters=10, n_ps=7, temp_dir='/home/adria/P-rw', debye=0.1, total_frames=100000, model='HPS-T'):
+    def phospho_rew(self, T,  savefile, iters=10000, n_ps=7, temp_dir='/home/adria/P-rw', debye=0.1, total_frames=100000, model='HPS-T', scale=0.75):
         its = []
         pathlib.Path(temp_dir).mkdir(parents=True, exist_ok=True)
         rgi = self.rg(full=True)[0][T]
+
+        shutil.copyfile(os.path.join(self.md_dir, f'topo.pdb'),
+                        os.path.join(temp_dir, f'topo.pdb'))
+
         if self.last_frames is None:
             rgi = rgi[-total_frames:]
 
@@ -485,6 +541,7 @@ class Analysis:
             seq_to_l = np.array(list(self.sequence))
             seq_to_l[ps] = 'D'
             sequence = ''.join(seq_to_l)
+            # sequence = self.sequence
 
             shutil.copyfile(os.path.join(self.md_dir, f'atom_traj_{T}.lammpstrj'),
                             os.path.join(temp_dir, f'atom_traj_P_rw.lammpstrj'))
@@ -508,20 +565,21 @@ class Analysis:
             rerun.rerun_start = og_time + og_save - Ei.shape[0] * og_save * every
             # in timesteps
             rerun.rerun_stop = og_time
+            rerun.hps_scale = scale
 
             rerun.write_hps_files(rerun=True, data=True, qsub=False, slurm=False, readme=False, rst=False, pdb=False,
                               silent=True)
             rerun.run(file=os.path.join(temp_dir, 'lmp0.lmp'), n_cores=1)
 
-            rerun_analysis = lmp.LMP(md_dir=temp_dir)
+            rerun_analysis = lmp.LMP(md_dir=temp_dir, every=1)
 
             Ef = rerun_analysis.data[0, :, 1]
             weights = rerun_analysis.weights(Ei=Ei, Ef=Ef, T=self.temperatures[T])
             weights = weights / np.sum(weights)
             n_eff = self.n_eff_calc(weights)
             reweight_rg = np.dot(rgi, weights.T)
-            with open(savefile,'w+') as fout:
-                fout.write(f"{reweight_rg.mean():.3f} {n_eff:.3f} {rgi.mean():.3f}")
+            with open(savefile, 'a+') as fout:
+                fout.write(f"{reweight_rg.mean():.3f} {n_eff:.3f} {rgi.mean():.3f} {ps}\n")
 
     # TODO : TDP USEFUL ONLY
     def topo_minimize(self, T, new_seq, temp_dir='/home/adria/TDP'):
@@ -712,13 +770,15 @@ class Analysis:
             return 2
         save_period = self.data[0, 1, 0]
         corr_tau_T = []
-        rg = self.rg()
-        for T in range(len(self.get_temperatures())):
-            ac = statsmodels.tsa.stattools.acf(rg[T], nlags=200, fft=False)
+        rg = self.rg(full=True)
+        acs = []
+        for T in range(len(self.temperatures)):
+            ac = statsmodels.tsa.stattools.acf(rg[0][T], nlags=200, fft=False)
+            acs.append(ac)
             mi = ac[np.abs(ac) < 0.2][0]
             # corr_tau_T.append(int(save_period * np.where(ac == mi)[0][0]))
             corr_tau_T.append(np.where(ac == mi)[0][0])
-        return np.max(corr_tau_T)
+        return np.array(acs), np.max(corr_tau_T)
 
     def n_eff_calc(self, weights, kish=False):
         """
@@ -1098,20 +1158,25 @@ class Analysis:
         z_plus = z[np.where(z >= 0)]
         i_guess = [0.1, rho_z_plus.max()/2, -100]
 
-        popt_plus, pcov_plus = curve_fit(tanh_fit, z_plus, rho_z_plus, p0=i_guess)
+        try:
+            popt_plus, pcov_plus = curve_fit(tanh_fit, z_plus, rho_z_plus, p0=i_guess)
+        except:
+            print("fit Failed")
+            return [0,0], [0,0], 0, 0
+
         c_interface = fsolve(tanh_solve, x0=1, args=(*popt_plus, rho_z_plus.max()*cutoff_c))[0]
         d_interface = fsolve(tanh_solve, x0=1, args=(*popt_plus, rho_z_plus.max()*cutoff_d))[0]
 
-        return [-c_interface, c_interface], [-d_interface, d_interface]
+        return [-c_interface, c_interface], [-d_interface, d_interface], z, tanh_fit(z, *popt_plus)
 
-    def phase_diagram(self, cutoff_c=0.9, cutoff_d=0.1, full=False, intf_c_cutoff=None, intf_d_cutoff=None):
+    def phase_diagram(self, cutoff_c=0.9, cutoff_d=0.1, full=False, intf_c_cutoff=None, intf_d_cutoff=None, start_T=None, end_T=None):
         dilute_densities = []
         condensed_densities = []
-        for T in range(len(self.temperatures)):
-            z, rho_z, shifts = self.density_profile(T=T, noise=False)
+        for T in range(len(self.temperatures[start_T:end_T])):
+            z, rho_z, xa, caa, pa, shifts = self.density_profile(T=T, noise=False)
             # z_fit, rho_fit, tanh_fit, interface_pos = self.interface_position(rho_z=rho_z.mean(axis=0), slab_bins=z)
             if intf_c_cutoff is None and intf_d_cutoff is None:
-                interface_c, interface_d = self.interface_position(rho_z=rho_z.mean(axis=0), z=z, cutoff_c=cutoff_c, cutoff_d=cutoff_d)
+                interface_c, interface_d, z, fit = self.interface_position(rho_z=rho_z.mean(axis=0), z=z, cutoff_c=cutoff_c, cutoff_d=cutoff_d)
             else:
                 interface_c = [-intf_c_cutoff, intf_c_cutoff]
                 interface_d = [-intf_d_cutoff, intf_d_cutoff]
@@ -1171,7 +1236,6 @@ class Analysis:
         #                           p0=[0.2, 0.2, 0.2])
                                   # p0=[0.2, popt[1], 0.2])
         # print(popt)
-        print(popt)
     # except:
         print("Optimization failed")
         return None, None
@@ -1196,6 +1260,7 @@ class Analysis:
 
     def _clean_memory(self):
         self.structures = None
+
 
 def top_parallel_calc(initial_frame, final_frame, obj, i, flat_pairs):
     inter_chain = np.zeros(shape=(obj.chains, obj.chain_atoms, obj.chain_atoms), dtype='float64')

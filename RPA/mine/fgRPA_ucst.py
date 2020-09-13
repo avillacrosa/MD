@@ -12,18 +12,21 @@ from numpy import pi
 
 
 class fgRPA_ucst:
-    def __init__(self, seqname, ehs, phis_mM, find_cri, umax, pH=7, zc=1, zs=1, epsfun=False, eps_modify_ehs=False,
+    def __init__(self, seqname, ehs, phis_mM, find_cri, pH=7, zc=1, zs=1, eps0=80, epsfun=False, eps_modify_ehs=False,
                  parallel=False, **kwargs):
-        self.du = kwargs.get('du', 0.1)
+        self.du = kwargs.get('du', 0.05)
         self.zc = zc
         self.zs = zs
+        self.eps0 = eps0
         self.epsfun = epsfun
         self.eps_modify_ehs = eps_modify_ehs
         self.ehs = ehs
-        self.umax = umax
-        self.parallel=parallel
+        self.parallel = parallel
+        self.name = kwargs.get('name',None)
+        self.cri_only = kwargs.get('cri_only', False)
+        self.mimics = kwargs.get("mimics", None)
 
-        protein_data = sl.get_the_charge(seqname, pH=pH)
+        protein_data = sl.get_the_charge(seqname, pH=pH, mimics=self.mimics)
         self.seqname = seqname
         self.sigma = protein_data[0]
         self.N = protein_data[1]
@@ -40,7 +43,7 @@ class fgRPA_ucst:
         self.find_cri = find_cri
 
         # Minimization helpers
-        self.phi_min_calc = 1e-12
+        self.phi_min_calc = 0
         self.invT = 1e4
 
         self.r_res = 1
@@ -51,24 +54,10 @@ class fgRPA_ucst:
         self.phi_min_sys = 1e-12
 
     def run(self):
-
         # ehs must be a 2-element list: the first for entropy and the latter enthalpy
         ehs = self.ehs
-
-        # use  phi-dependent permittivity or not
-        ef = False
-        umax = self.umax
-
-        if self.find_cri:
-            cri_calc_end = 1
-        else:
-            cri_calc_end = 0
-            umax = self.umax
-
         seq_name = self.seqname
-        N = self.N
         the_seq = self.sequence
-        HP = self.HP
         du = self.du
         phis = self.phis
         # ======================= Calculate critical point ========================
@@ -82,22 +71,28 @@ class fgRPA_ucst:
 
         # critical_point
         phi_cri, u_cri = self.cri_calc()
+        if self.cri_only:
+            sp_file = '/home/adria/perdiux/prod/lammps/final/RPA/fg_ucst/c_only_' + self.name + '.txt'
+            print(f"Saving criticial point only at {sp_file}")
+            with open(sp_file, 'a+') as fin:
+                fin.write(f"{phi_cri} {u_cri} {self.mimics} \n")
+            return
 
         print('Critical point found in', time.time() - t0, 's')
         print('u_cri =', '{:.4e}'.format(u_cri),
               'T*_cri = {:.4f}'.format(1 / u_cri),
               ', phi_cri =', '{:.8e}'.format(phi_cri))
 
-        if umax is None:
-            sys.exit()
-
         # ============================ Set up u range =============================
+
+        umax = u_cri * 1.5
+        hel = np.linspace(u_cri,umax,10)
+        du = hel[1]-hel[0]
         ddu = du / 10
         umin = (np.floor(u_cri / ddu) + 1) * ddu
         uclose = (np.floor(u_cri / du) + 2) * du
 
-        if umax < u_cri:
-            umax = np.floor(u_cri * 1.5)
+        print(du, umax)
         if uclose > umax:
             uclose = umax
 
@@ -110,9 +105,9 @@ class fgRPA_ucst:
 
         def bisp_parallel(u):
             sp1, sp2 = self.ps_sp_solve(u, phi_cri)
-            print(u, sp1, sp2, 'sp done!', flush=True)
+            # print(u, sp1, sp2, 'sp done!', flush=True)
             bi1, bi2 = self.ps_bi_solve(u, [sp1, sp2], phi_cri)
-            print(u, bi1, bi2, 'bi done!', flush=True)
+            # print(u, bi1, bi2, 'bi done!', flush=True)
 
             return sp1, sp2, bi1, bi2
 
@@ -122,11 +117,11 @@ class fgRPA_ucst:
         else:
             sp1ss, sp2ss, bi1ss, bi2ss = zip(*map(bisp_parallel, uall))
 
-        ind_slc = np.where(np.array(bi1ss) > self.phi_min_sys)[0]
+        ind_slc = np.where(np.array(bi1ss) > -10000000)[0]
+        # ind_slc = np.where(np.array(bi1ss) > 1e12)[0]
         unew = uall[ind_slc]
         sp1s, sp2s = np.array(sp1ss)[ind_slc], np.array(sp2ss)[ind_slc]
         bi1s, bi2s = np.array(bi1ss)[ind_slc], np.array(bi2ss)[ind_slc]
-        new_umax = np.max(unew)
         nnew = ind_slc.shape[0]
 
         sp_out, bi_out = np.zeros((2 * nnew + 1, 2)), np.zeros((2 * nnew + 1, 2))
@@ -135,16 +130,22 @@ class fgRPA_ucst:
         bi_out[:, 0] = np.append(np.append(bi1s[::-1], phi_cri), bi2s)
         bi_out[:, 1] = sp_out[:, 1]
 
-        print(sp_out)
         print(bi_out)
+        print(sp_out)
 
         monosize = str(self.r_res) + '_' + str(self.r_con) + '_' + str(self.r_sal)
         ehs_str = '_'.join(str(x) for x in ehs)
 
-        calc_info = '_RPAFH_N{}_phis_{:.5f}_{}_eh{:.2f}_es{:.2f}_umax{:.2f}_du{:.2f}_ddu{:.2f}.txt'.format(
-            N, phis, seq_name, ehs[0], ehs[1], new_umax, du, ddu)
-        sp_file = '/home/adria/perdiux/prod/lammps/final/RPA/fg_ucst/sp' + calc_info
-        bi_file = '/home/adria/perdiux/prod/lammps/final/RPA/fg_ucst/bi' + calc_info
+        # calc_info = '_RPAFH_N{}_phis_{:.5f}_{}_eh{:.2f}_es{:.2f}_umax{:.2f}_du{:.2f}_ddu{:.2f}.txt'.format(
+        #     N, phis, seq_name, ehs[0], ehs[1], new_umax, du, ddu)
+        calc_info = '_RPAFH_phis_{:.5f}_{}_eh{:.2f}_es{:.2f}.txt'.format(
+            phis, seq_name, ehs[0], ehs[1])
+        if self.name is None:
+            sp_file = '/home/adria/perdiux/prod/lammps/final/RPA/fg_ucst/sp' + calc_info
+            bi_file = '/home/adria/perdiux/prod/lammps/final/RPA/fg_ucst/bi' + calc_info
+        else:
+            sp_file = '/home/adria/perdiux/prod/lammps/final/RPA/fg_ucst/sp_' + self.name + '.txt'
+            bi_file = '/home/adria/perdiux/prod/lammps/final/RPA/fg_ucst/bi_' + self.name + '.txt'
 
         print(sp_file)
         print(bi_file)
@@ -157,6 +158,10 @@ class fgRPA_ucst:
         return uall, sp1ss, sp2ss, bi1ss, bi2ss
 
     def Heteropolymer(self, eps_a=18.931087269965023, eps_b=84.51003476887941):
+        # epsfun=False   : constant permittivity
+        # epsfun=True    : linear phi-dependent permittivity, eps_a, eps_b are used
+        # eps_modify_ehs : Ture if using eps_r=eps0 to rescale ehs
+        #                  (assuming the input ehs is of eps_r=1)
         # sequence parameters
         sig = self.sigma
         N = self.N  # sequence length
@@ -186,8 +191,8 @@ class fgRPA_ucst:
             HP['depsx'] = lambda x: -b * (a - b) / (flinear(x)) ** 2
             HP['ddepsx'] = lambda x: 2 * b * (a - b) * (a - b) / (flinear(x)) ** 3
         else:
-            HP['eps0'] = 1
-            HP['epsx'] = lambda x: 1 * (x == x)
+            HP['eps0'] = self.eps0
+            HP['epsx'] = lambda x: self.eps0 * (x == x)
             HP['depsx'] = lambda x: 0 * x
             HP['ddepsx'] = lambda x: 0 * x
 

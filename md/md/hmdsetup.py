@@ -25,8 +25,8 @@ def HPS_potential(r, rmin, rmax, eps, lambd, sigma):
 def HPS_pi_potential(r, rmin, rmax, eps_hps, eps_pi, lambd, sigma):
     V = 4 * eps_hps * ((sigma / r) ** 12 - (sigma / r) ** 6)
     F = 4 * eps_hps / r * (12 * (sigma / r) ** 12 - 6 * (sigma / r) ** 6)
-    V_pi = 4 * eps_pi * ((sigma / r) ** 12 - (sigma / r) ** 6)
-    F_pi = 4 * eps_pi / r * (12 * (sigma / r) ** 12 - 6 * (sigma / r) ** 6)
+    V_pi = eps_pi * ((sigma / r) ** 12 - (sigma / r) ** 6)
+    F_pi = eps_pi / r * (12 * (sigma / r) ** 12 - 6 * (sigma / r) ** 6)
     if r <= 2 ** (1 / 6) * sigma:
         V = V + (1 - lambd) * eps_hps + V_pi
         F = F + F_pi
@@ -47,6 +47,7 @@ class HMDSetup:
         self.chains = chains
         self.o_wd = oliba_wd
         self.this = os.path.dirname(os.path.dirname(__file__))
+        self.processors = kwargs.get('processors', None)
 
         with open(os.path.join(definitions.hps_data_dir, f'sequences/{protein}.seq')) as f:
             self.sequence = f.readlines()[0]
@@ -56,6 +57,7 @@ class HMDSetup:
         self.eps_pi = kwargs.get('eps_pi', 3)
         self.temp_dict = {}
         self.aux_dict = {}
+        self.slurm_file_dict = {}
         self.save = kwargs.get('save', 10000)
         self.water_perm = kwargs.get('water_perm', 80)
         self.topo_path = kwargs.get('topo_path', None)
@@ -71,7 +73,10 @@ class HMDSetup:
         self.box_size = {}
         self.kT = 0.00831445986144858*self.temperature
         self.ionic_strength = kwargs.get('ionic_strength', 300)
-        self.context = f"--gpu={len(glob.glob(os.path.join(self.o_wd, '*.py')))}"
+        if self.processors is not None:
+            self.context = ""
+        else:
+            self.context = f"--gpu={len(glob.glob(os.path.join(self.o_wd, '*.py')))}"
         self.residue_dict = dict(definitions.residues)
 
         # Slab parameters
@@ -82,12 +87,14 @@ class HMDSetup:
         droplet_zlength = 60
         ## 1.2 factor to give space for more expanded than usual configurations
         # self.slab_dimensions["x"] = 1.5*(self.chains * 4 * math.pi / 3 / droplet_zlength * self.rw_rg() ** 3) ** 0.5
-        self.slab_dimensions["x"] = 1.0*(self.chains * 4 * math.pi / 3 / droplet_zlength * self.rw_rg() ** 3) ** 0.5
+        # self.slab_dimensions["x"] = 1.0*(self.chains * 4 * math.pi / 3 / droplet_zlength * self.rw_rg() ** 3) ** 0.5
+        self.slab_dimensions["x"] = 13
         self.slab_dimensions["y"] = self.slab_dimensions["x"]
         self.slab_dimensions["z"] = 250
-        self.contract_t = kwargs.get('contract_t', 200000)
-        self.slab_t = kwargs.get('slab_t', 400000)
+        self.contract_t = kwargs.get('contract_t', 100000)
+        self.slab_t = kwargs.get('slab_t', 1000000)
         self.final_slab_volume = 400 / 4
+        self.job_name = kwargs.get('job_name', f's{self.hps_scale}_x{self.chains}-{self.protein}')
 
     def _get_HPS_particles(self):
         def convert_to_HPST(aa):
@@ -177,13 +184,14 @@ class HMDSetup:
         rg = monomer_l*(len(self.sequence)/6)**0.5
         return rg
 
-    def write_hps_files(self):
+    def write_hps_files(self, slurm=False):
         pathlib.Path(self.o_wd).mkdir(parents=True, exist_ok=True)
         # if self.topo_path is None:
         #     self.topo_path = self.get_topo()
         # else:
         #     shutil.copyfile(self.topo_path, os.path.join(self.o_wd, 'topo.pdb'))
         self.get_topo()
+        self._generate_slurm()
         self.topo_path = 'topo.pdb'
         pdb = self._generate_pdb()
         self._build_temp_dict()
@@ -219,6 +227,22 @@ class HMDSetup:
             runner.write(f'python3 hmd_hps_{self.temperature:.0f}.py > run_{self.temperature:.0f}.log & \n')
         st = os.stat(os.path.join(self.o_wd, f'run.sh'))
         os.chmod(os.path.join(self.o_wd, f'run.sh'), st.st_mode | stat.S_IEXEC)
+        if slurm:
+            slurm_temp_file = open(os.path.join(self.this, 'templates/hmd_slurm_template.slm'))
+            slurm_template = Template(slurm_temp_file.read())
+            slurm_subst = slurm_template.safe_substitute(self.slurm_file_dict)
+            with open(os.path.join(self.o_wd, f'{self.job_name}_{self.temperature:.0f}.slm'), 'tw') as fileout:
+                fileout.write(slurm_subst)
+            run_free = True
+            if os.path.exists(os.path.join(self.o_wd, f'run.sh')):
+                with open(os.path.join(self.o_wd, f'run.sh'), 'r') as runner:
+                    if f'sbatch {self.job_name}_{self.temperature:.0f}.slm \n' in runner.readlines():
+                        run_free = False
+            if run_free:
+                with open(os.path.join(self.o_wd, f'run.sh'), 'a+') as runner:
+                    runner.write(f'sbatch {self.job_name}_{self.temperature:.0f}.slm \n')
+            st = os.stat(os.path.join(self.o_wd, f'run.sh'))
+            os.chmod(os.path.join(self.o_wd, f'run.sh'), st.st_mode | stat.S_IEXEC)
 
     def _generate_pdb(self, display=None):
         """
@@ -316,3 +340,21 @@ class HMDSetup:
                                          rmax=3,
                                          coeff=dict(eps=0.2*4.184, lambd=lambd, sigma=sigma/10))
         return hps_table
+
+    def _generate_slurm(self):
+        """
+        Generate a slm file to run at CSUC
+        :return:
+        """
+        if self.processors is not None:
+            self.slurm_file_dict["command"] = f"python hmd_hps_{self.temperature:.0f}.py"
+            self.slurm_file_dict["tasktype"] = f"--ntasks={self.processors}"
+            self.slurm_file_dict["queue"] = "std"
+            self.slurm_file_dict["activate"] = "hoomd_cpu"
+        else:
+            self.slurm_file_dict["command"] = f"mpirun -np 1 python hmd_hps_{self.temperature:.0f}.py  --mode=gpu"
+            self.slurm_file_dict["tasktype"] = "--gres=gpu:1"
+            self.slurm_file_dict["queue"] = "gpu"
+            self.slurm_file_dict["activate"] = "hoomd_cpu"
+
+        self.slurm_file_dict["jobname"] = self.job_name+f"-{self.temperature:.0f}"
