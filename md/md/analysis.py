@@ -109,16 +109,16 @@ class Analysis:
 
         for i, id1 in enumerate(seq_to_id):
             for j, id2 in enumerate(seq_to_id):
-                aa_map[id1-1, id2-1] += contacts[0, i, j]
+                aa_map[id1 - 1, id2 - 1] += contacts[0, i, j]
 
         if normed:
             counter = {}
             for res in self.residue_dict:
-                counter[self.residue_dict[res]["id"]-1] = self.sequence.count(res)
+                counter[self.residue_dict[res]["id"] - 1] = self.sequence.count(res)
             print(counter)
             for i in range(len(self.residue_dict)):
                 for j in range(len(self.residue_dict)):
-                    aa_map[i, j] /= counter[i]*counter[j]
+                    aa_map[i, j] /= counter[i] * counter[j]
         return aa_map
 
     def intra_distance_map(self, contacts=False, temperature=None, normed=False):
@@ -139,10 +139,8 @@ class Analysis:
         if temperature is not None:
             structures = [structures[temperature]]
         for traj in structures:
-            # It's either this or multiply x10 the unitcell length I prefer this
-            traj.xyz = traj.xyz/10.
             pairs = list(itertools.product(range(traj.top.n_atoms - 1), range(1, traj.top.n_atoms)))
-            d = md.compute_distances(traj, pairs) * 10.
+            d = md.compute_distances(traj, pairs)
             d = md.geometry.squareform(d, pairs)
             contact_map = d
             if contacts:
@@ -328,12 +326,13 @@ class Analysis:
             nu = x
             g = gamma
             N = len(self.sequence)
-            prefactor = g*(g+1)/(2*(g+2*nu)*(g+2*nu+1))
-            prefactor = prefactor**0.5
-            return rg - prefactor*b*N**nu
+            prefactor = g * (g + 1) / (2 * (g + 2 * nu) * (g + 2 * nu + 1))
+            prefactor = prefactor ** 0.5
+            return rg - prefactor * b * N ** nu
 
         self.rg()
         rg = self.c_rg[0]
+        print(rg)
         nus = []
         for T in range(len(self.temperatures)):
             ret = fsolve(rg_f, x0=0.5, args=rg[T])
@@ -343,8 +342,8 @@ class Analysis:
     def pair_energies(self, model='HPS'):
         def HPS_potential(r, eps, lambd, sigma):
             V = 4 * eps * ((sigma / r) ** 12 - (sigma / r) ** 6)
-            if r <= 2**(1/6)*sigma:
-                V += (1-lambd)*eps
+            if r <= 2 ** (1 / 6) * sigma:
+                V += (1 - lambd) * eps
             else:
                 V *= lambd
             return V
@@ -361,8 +360,8 @@ class Analysis:
         df = pd.DataFrame(index=self.residue_dict.keys(), columns=self.residue_dict.keys())
         for aa1 in self.residue_dict:
             for aa2 in self.residue_dict:
-                sigma = (self.residue_dict[aa1]["sigma"]+self.residue_dict[aa2]["sigma"])/2
-                lambd = (self.residue_dict[aa1]["lambda"]+self.residue_dict[aa2]["lambda"])/2
+                sigma = (self.residue_dict[aa1]["sigma"] + self.residue_dict[aa2]["sigma"]) / 2
+                lambd = (self.residue_dict[aa1]["lambda"] + self.residue_dict[aa2]["lambda"]) / 2
                 if model == 'KH':
                     ks = pd.read_csv('/home/adria/scripts/data/hps/kh.dat', sep=" ", index_col=0)
                     eps_ij = ks[aa1][aa2]
@@ -374,9 +373,9 @@ class Analysis:
                     else:
                         lambd = -1
                     eps_ij = abs(eps_ij)
-                    df[aa1][aa2] = HPS_potential(2**(1/6)*sigma, eps_ij, lambd, sigma)
+                    df[aa1][aa2] = HPS_potential(2 ** (1 / 6) * sigma, eps_ij, lambd, sigma)
                 else:
-                    df[aa1][aa2] = HPS_potential(2**(1/6)*sigma, 0.2, lambd, sigma)
+                    df[aa1][aa2] = HPS_potential(2 ** (1 / 6) * sigma, 0.2, lambd, sigma)
         return df
 
     def pair_potential(self, aminoacid, model='HPS', energies=False):
@@ -390,7 +389,7 @@ class Analysis:
             close_cond = np.where(r <= 2 ** (1 / 6) * sigma)
             far_cond = np.where(r > 2 ** (1 / 6) * sigma)
             V[close_cond] = V[close_cond] + (1 - lambd) * eps
-            V[far_cond] = lambd*V[far_cond]
+            V[far_cond] = lambd * V[far_cond]
             return V
 
         def KH_potential(r, eps, sigma):
@@ -404,11 +403,11 @@ class Analysis:
         r = np.linspace(5, 10, 200)
         aa_pot = {}
         aa = aminoacid
-        if model=='HPS':
+        if model == 'HPS':
             lambd = self.residue_dict[aa]["lambda"]
             sigma = self.residue_dict[aa]["sigma"]
-            return r, HPS_potential(np.array([2**(1/6)*sigma]), 0.2, lambd, sigma)
-        if model=='KH':
+            return r, HPS_potential(np.array([2 ** (1 / 6) * sigma]), 0.2, lambd, sigma)
+        if model == 'KH':
             ks = pd.read_csv('/home/adria/scripts/data/hps/kh.dat', sep=" ", index_col=0)
             eps_ij = ks[aa][aa]
             print(eps_ij)
@@ -423,7 +422,7 @@ class Analysis:
                 lambd = -1
             print("KH_KH")
             # return r, HPS_potential(r, eps_ij, lambd, sigma)
-            return r, KH_potential(r, eps_ij,  sigma)
+            return r, KH_potential(r, eps_ij, sigma)
         return r, aa_pot
 
     # TODO : UNTESTED
@@ -514,7 +513,8 @@ class Analysis:
             np.savetxt(path, np.array([np.array(rgs), np.array(err)]))
         return np.array(rgs), np.array(err)
 
-    def phospho_rew(self, T,  savefile, iters=10000, n_ps=7, temp_dir='/home/adria/P-rw', debye=0.1, total_frames=100000, model='HPS-T', scale=0.75):
+    def phospho_rew(self, T, savefile, iters=10000, n_ps=7, temp_dir='/home/adria/P-rw', debye=0.1, total_frames=100000,
+                    model='HPS-T', scale=0.75):
         its = []
         pathlib.Path(temp_dir).mkdir(parents=True, exist_ok=True)
         rgi = self.rg(full=True)[0][T]
@@ -554,7 +554,7 @@ class Analysis:
             Ei = Ei[-last:]
 
             rerun = lmpsetup.LMPSetup(oliba_wd=temp_dir, protein='CPEB4',
-                                       debye=debye, temperatures=[self.temperatures[T]])
+                                      debye=debye, temperatures=[self.temperatures[T]])
             rerun.rerun_dump = f'atom_traj_P_rw.lammpstrj'
             rerun.sequence = sequence
             rerun.debye = 0.1
@@ -568,7 +568,7 @@ class Analysis:
             rerun.hps_scale = scale
 
             rerun.write_hps_files(rerun=True, data=True, qsub=False, slurm=False, readme=False, rst=False, pdb=False,
-                              silent=True)
+                                  silent=True)
             rerun.run(file=os.path.join(temp_dir, 'lmp0.lmp'), n_cores=1)
 
             rerun_analysis = lmp.LMP(md_dir=temp_dir, every=1)
@@ -625,9 +625,9 @@ class Analysis:
         return rrg.mean(), lmprg, rew_rg, n_eff
 
     def maximize_charge(self, above_obj, below_obj, T, l0, eps0, method=None,
-                    temp_dir='/home/adria/OPT',  total_frames=100000,
-                    savefile='/home/adria/results.txt', model='HPS-T',
-                    weight_cost_mean=1):
+                        temp_dir='/home/adria/OPT', total_frames=100000,
+                        savefile='/home/adria/results.txt', model='HPS-T',
+                        weight_cost_mean=1):
         """
         Optimize the radius of gyration difference between 2 independent LAMMPS run. The cost function is essentially
         c = -(RgA - RgB)**2 + weight_cost_mean*((RgA+RgB)/2 - <Rg>)**2
@@ -1048,8 +1048,11 @@ class Analysis:
         xa, slab_bins = bin_coms(bin_size=16)
         return xa, slab_bins
 
-    def density_profile_by_type(self, T=0):
-        test = self.structures[T].xyz[:, :, 2]
+    # def density_profile_by_type(self, z, rho_z_cent, T=0, ):
+    def density_profile_by_type(self, shifts=None, T=0, ):
+        if shifts is None:
+            _, _, _, _, _, shifts = self.density_profile(T=T)
+        test = self.structures[T].xyz[:, :, 2] - shifts[..., np.newaxis]
 
         types = ["hydrophobic", "charged", "polar", "aromatic", "other"]
         seq_to_type = []
@@ -1083,7 +1086,7 @@ class Analysis:
             random_displacement = np.random.randint(-self.box["z"] / 2 * 0.5, self.box["z"] / 2 * 0.5,
                                                     size=self.structures[0].n_frames)
             random_displacement = np.repeat(random_displacement[:, np.newaxis], self.structures[0].n_atoms, axis=1)
-            test = self.structures[T].xyz[:, :, 2]  - random_displacement
+            test = self.structures[T].xyz[:, :, 2] - random_displacement
         else:
             test = self.structures[T].xyz[:, :, 2]
 
@@ -1100,7 +1103,8 @@ class Analysis:
                 bins = np.array(bins)
                 bins_f.append(bins)
             return np.array(bins_f), np.array(xbins)
-        bin_size=16
+
+        bin_size = 16
         xa, slab_bins = bin_coms(bin_size=bin_size)
         print(xa.shape)
         n_lags = math.ceil(len(slab_bins) / 2)
@@ -1112,7 +1116,7 @@ class Analysis:
             # Caa is symmetric
             caa[:, lag + n_lags] = acf / ((len(slab_bins) - lag) * np.var(xa, axis=1))
             caa[:, -lag + n_lags] = acf / ((len(slab_bins) - lag) * np.var(xa, axis=1))
-        caa = caa[:, (n_lags*2-len(slab_bins)):]
+        caa = caa[:, (n_lags * 2 - len(slab_bins)):]
 
         pa = np.ones_like(caa)
         pa[caa < 0.5] = 0
@@ -1124,18 +1128,18 @@ class Analysis:
         # WORKS
         for lag in range(0, n_lags):
             xa_mod = xa[:, lag:]
-            pa_lag = np.flip(pa, axis=1)[:, :(2 * n_lags - lag - (n_lags*2-len(slab_bins)))]
+            pa_lag = np.flip(pa, axis=1)[:, :(2 * n_lags - lag - (n_lags * 2 - len(slab_bins)))]
             xcc[:, lag] = np.sum(xa_mod * pa_lag, axis=1)
 
         for lag in range(0, n_lags):
             xa_mod = np.flip(xa, axis=1)[:, lag:]
-            pa_lag = pa[:, :(2 * n_lags - lag - (n_lags*2-len(slab_bins)))]
+            pa_lag = pa[:, :(2 * n_lags - lag - (n_lags * 2 - len(slab_bins)))]
             xcc[:, -lag] = np.sum(xa_mod * pa_lag, axis=1)
 
         nmaxs = np.argmax(xcc, axis=1)
         for f in range(len(nmaxs)):
             if nmaxs[f] > n_lags:
-                nmaxs[f] = nmaxs[f] - n_lags*2 + (n_lags*2-len(slab_bins))
+                nmaxs[f] = nmaxs[f] - n_lags * 2 + (n_lags * 2 - len(slab_bins))
 
         x_shift = np.zeros(shape=xa.shape)
         for frame in range(xa.shape[0]):
@@ -1143,7 +1147,7 @@ class Analysis:
 
         z = slab_bins
         rho_z = x_shift
-        shifts = nmaxs*bin_size
+        shifts = nmaxs * bin_size
         return z, rho_z, xa, caa, pa, shifts
 
     def interface_position(self, z, rho_z, cutoff_c=0.9, cutoff_d=0.1):
@@ -1156,27 +1160,29 @@ class Analysis:
 
         rho_z_plus = rho_z[np.where(z >= 0)]
         z_plus = z[np.where(z >= 0)]
-        i_guess = [0.1, rho_z_plus.max()/2, -100]
+        i_guess = [0.1, rho_z_plus.max() / 2, -100]
 
         try:
             popt_plus, pcov_plus = curve_fit(tanh_fit, z_plus, rho_z_plus, p0=i_guess)
         except:
             print("fit Failed")
-            return [0,0], [0,0], 0, 0
+            return [0, 0], [0, 0], 0, 0
 
-        c_interface = fsolve(tanh_solve, x0=1, args=(*popt_plus, rho_z_plus.max()*cutoff_c))[0]
-        d_interface = fsolve(tanh_solve, x0=1, args=(*popt_plus, rho_z_plus.max()*cutoff_d))[0]
+        c_interface = fsolve(tanh_solve, x0=1, args=(*popt_plus, rho_z_plus.max() * cutoff_c))[0]
+        d_interface = fsolve(tanh_solve, x0=1, args=(*popt_plus, rho_z_plus.max() * cutoff_d))[0]
 
         return [-c_interface, c_interface], [-d_interface, d_interface], z, tanh_fit(z, *popt_plus)
 
-    def phase_diagram(self, cutoff_c=0.9, cutoff_d=0.1, full=False, intf_c_cutoff=None, intf_d_cutoff=None, start_T=None, end_T=None):
+    def phase_diagram(self, cutoff_c=0.9, cutoff_d=0.1, full=False, intf_c_cutoff=None, intf_d_cutoff=None,
+                      start_T=None, end_T=None):
         dilute_densities = []
         condensed_densities = []
         for T in range(len(self.temperatures[start_T:end_T])):
             z, rho_z, xa, caa, pa, shifts = self.density_profile(T=T, noise=False)
             # z_fit, rho_fit, tanh_fit, interface_pos = self.interface_position(rho_z=rho_z.mean(axis=0), slab_bins=z)
             if intf_c_cutoff is None and intf_d_cutoff is None:
-                interface_c, interface_d, z, fit = self.interface_position(rho_z=rho_z.mean(axis=0), z=z, cutoff_c=cutoff_c, cutoff_d=cutoff_d)
+                interface_c, interface_d, z, fit = self.interface_position(rho_z=rho_z.mean(axis=0), z=z,
+                                                                           cutoff_c=cutoff_c, cutoff_d=cutoff_d)
             else:
                 interface_c = [-intf_c_cutoff, intf_c_cutoff]
                 interface_d = [-intf_d_cutoff, intf_d_cutoff]
@@ -1195,7 +1201,7 @@ class Analysis:
             volume_condensed = ((interface_c[1] - interface_c[0]) * self.box["x"] * self.box["y"])
             # volume_dilute = self.box["x"] * self.box["y"] * self.box["z"] - volume_condensed
             volume_dilute = self.box["x"] * self.box["y"] * self.box["z"] - (
-                        (interface_d[1] - interface_d[0]) * self.box["x"] * self.box["y"])
+                    (interface_d[1] - interface_d[0]) * self.box["x"] * self.box["y"])
             # dilute_densities.append(diluted*mass_dilute/volume_dilute)
             if full:
                 dilute_densities.append((mass_dilute / volume_dilute))
@@ -1205,8 +1211,8 @@ class Analysis:
                 condensed_densities.append((mass_condensed / volume_condensed).mean())
             # condensed_densities.append(condensed*mass_condensed/volume_condensed)
         # return np.array(md)
-        dilute_densities = np.array(dilute_densities)*10**27/cnt.Avogadro
-        condensed_densities = np.array(condensed_densities)*10**27/cnt.Avogadro
+        dilute_densities = np.array(dilute_densities) * 10 ** 27 / cnt.Avogadro
+        condensed_densities = np.array(condensed_densities) * 10 ** 27 / cnt.Avogadro
 
         return dilute_densities, condensed_densities
 
@@ -1221,7 +1227,7 @@ class Analysis:
     def find_Tc_from_diagram(self, rho_c, rho_d, temperatures):
         def scaling_coex_densities(x, A, Tc_sc):
             beta = 0.325
-            # return A * (Tc_sc - x) ** beta
+            # return A * (x-Tc_sc) ** beta
             return A * (x - Tc_sc) ** beta
 
         def rectilinear_diametres(x, A2, Tc_rd, rho_c):
@@ -1230,16 +1236,21 @@ class Analysis:
             # These fits perform good but parameters are bad if points in the left are also bad I guess
             # return 2*(rho_c + A2 * (Tc_rd - x))
 
-    # try:
-        popt, pcovt = curve_fit(scaling_coex_densities, temperatures, - rho_c + rho_d)
-        # popt2, pcovt2 = curve_fit(rectilinear_diametres, temperatures, (rho_c + rho_d),
-        #                           p0=[0.2, 0.2, 0.2])
-                                  # p0=[0.2, popt[1], 0.2])
-        # print(popt)
-    # except:
-        print("Optimization failed")
-        return None, None
+        # try:
+        #     popt, pcovt = curve_fit(scaling_coex_densities, temperatures, rho_c - rho_d, p0=[150, 270])
+        popt, pcovt = curve_fit(scaling_coex_densities, temperatures, rho_c - rho_d, p0=[100, 250])
 
+        popt2, pcovt2 = curve_fit(rectilinear_diametres, temperatures, (rho_c + rho_d),
+                                  p0=[0.2, 0.2, 0.2])
+        # p0=[0.2, popt[1], 0.2])
+        print("PPT1", popt, "PPT2", popt2)
+        # print(popt)
+        # except:
+        #     print("Optimization failed")
+        #     return None, None
+
+        # critical_T = [popt[1], popt2[1]]
+        # critical_rho = popt2[2]
         critical_T = [popt[1], popt2[1]]
         critical_rho = popt2[2]
         ext_T = np.linspace(np.max(temperatures), critical_T[0], 2000)
@@ -1256,7 +1267,7 @@ class Analysis:
         # fit[1, :2000] = ext_T
         # fit[1, 2000:] = np.flip(ext_T)
         cr_point = [critical_rho, critical_T[0]]
-        return fit[:, :2000], cr_point
+        return fit[:, :2000], popt
 
     def _clean_memory(self):
         self.structures = None
@@ -1310,7 +1321,6 @@ def flory_scaling(r0):
         return r0 * (x ** flory)
 
     return flory
-
 
 # def interface_position_old(self, rho_z, slab_bins, cutoff=0.5):
 #     def tanh_fit(x, s, y0, x0):

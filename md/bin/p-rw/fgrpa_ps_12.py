@@ -18,6 +18,10 @@ umax = 2
 seqname = 'CPEB4_D4'
 du = 0.001
 
+fgu.fgRPA_ucst(seqname='CPEB4_12D', find_cri=find_cri, phis_mM=phis_mM,
+               ehs=ehs, umax=umax, parallel=False, du=du, eps0=80, cri_only=True,
+               name="p-test-12").run()
+
 for pos in poss:
     fgu.fgRPA_ucst(seqname=seqname, find_cri=find_cri, phis_mM=phis_mM,
                    ehs=ehs, umax=umax, parallel=False, du=du, eps0=80, cri_only=True,

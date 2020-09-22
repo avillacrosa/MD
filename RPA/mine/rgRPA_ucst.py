@@ -9,16 +9,15 @@ import sys
 
 
 class rgRPA_ucst:
-    def __init__(self, seqname, find_cri, phis, eh, es, umax, eps0=80, fgRPA=False, pH=None, parallel=False, **kwargs):
+    def __init__(self, seqname, find_cri, phis, eh, es, eps0=80, fgRPA=False, pH=None, parallel=False, **kwargs):
         self.zc = kwargs.get('zc', 1)
         self.zs = kwargs.get('zs', 1)
         self.find_cri = find_cri
-        self.cri_pre_calc = kwargs.get('cri_pre_calc', False)
+        self.cri_pre_calc = kwargs.get('cri_pre_calc', True)
         self.phi_min_calc = ff.phi_min_calc
         self.invT = 1e2
         self.wtwo_ratio = kwargs.get('wtwo_ratio', None)
         self.parallel = parallel
-        self.umax = umax
         self.name = kwargs.get('name', None)
         self.cri_only = kwargs.get('cri_only', False)
         self.mimics = kwargs.get("mimics", None)
@@ -66,6 +65,7 @@ class rgRPA_ucst:
 
         t0 = time.time()
         phi_cri, u_cri = self.cri_calc()
+        phi_cri, u_cri = 1e-4, 2
         print('Critical point found in', time.time() - t0, 's')
         umax = u_cri * 1.5
         print('u_cri =', '{:.8e}'.format(u_cri), ', phi_cri =', '{:.8e}'.format(phi_cri))
@@ -200,30 +200,95 @@ class rgRPA_ucst:
 
         return HP
 
-    def cri_calc(self, ini1=1e-4, ini3=1e-1, ini2=2e-1):
+    # def cri_calc(self, ini1=1e-4, ini3=1e-1, ini2=2e-1):
+    def cri_calc(self, in1=1e-4, in2=1e-3, in3=1e-2):
         HP = self.HP
-        phis = self.phis
-        phi_max = (1 - 2 * self.phis) / (1 + HP['pc'])
-        # ini1, ini3, ini2 = 1e-6, 1e-2, phi_max*2/3
-
-        if self.cri_pre_calc:
-
-            u1 = self.cri_u_solve(ini1, phis)
-            u2 = self.cri_u_solve(ini2, phis)
-            u3 = self.cri_u_solve(ini3, phis)
-
-            while min(u1, u2, u3) != u3:
-                if u1 >= u2:
-                    ini3 = (ini2 + ini3) / 2
+        # phi_max = (1 - 2 * self.phis * self.r_sal) / (self.r_res + self.r_con * HP['pc'])
+        phi_max = (1 - 2 * self.phis * 1) / (1 + 1 * HP['pc'])
+        # Scan phi values until we find one where there is a change of sign.
+        while True:
+            ddf2 = self.cri_u_solve(in2)
+            if ddf2 is None:
+                if in2 > phi_max:
+                    print("Could not find a phi with Phase Separation")
+                    return
                 else:
-                    ini3 = (ini1 + ini3) / 2
+                    in2 *= 1.25
+            else:
+                break
+        step = 0.9
+        # Then find to neighbour points where there is still a change of sign
+        in1 = in2 * step
+        while True:
+            ddf1 = self.cri_u_solve(in1)
+            if ddf1 is None:
+                if in1 < self.phi_min_sys:
+                    print("Could not find in1")
+                    return
+                else:
+                    step = np.sqrt(step)
+                    in1 = in2 * step
+            else:
+                break
+        step = 1.1
+        in3 = in2 * step
+        while True:
+            ddf3 = self.cri_u_solve(in3)
+            if ddf3 is None:
+                if in3 > phi_max:
+                    print("Could not find in3")
+                    return
+                else:
+                    step = np.sqrt(step)
+                    in3 = in2 * step
+            else:
+                break
+        print('ddf1={:.4f}, in1={:4f}'.format(ddf1, in1))
+        print('ddf2={:.4f}, in1={:4f}'.format(ddf2, in2))
+        print('ddf3={:.4f}, in1={:4f}'.format(ddf3, in3))
+        # Finally, we can optimize these 3 points so that there is a maximum
+5        # u has a maximum in LCST (as it is inverse temperature)
+        while not ((ddf1 < ddf2) and (ddf3 < ddf2)):
+            if ddf1 >= ddf2:
+                in1 *= 0.999
+                ddf1 = self.cri_u_solve(in1)
+            else:  # ddf3 >= ddf2
+                ddf4 = self.cri_u_solve(in3 * 0.99)
+                if ddf4 < ddf3:
+                    in3 *= 1.1
+                    ddf3 = self.cri_u_solve(in3)
+                else:
+                    in2 += (in3 - in2) / 2
+                    ddf2 = self.cri_u_solve(in2)
 
-            u3 = self.cri_u_solve(ini3, 0)
-        result = sco.brent(self.cri_u_solve, args=(phis,), brack=(ini1, ini3, ini2), full_output=True)
-
-        phicr, ucr = result[0], result[1]
+        result = sco.brent(self.cri_u_solve_max, brack=(in1, in2, in3), full_output=True)
+        phicr = result[0]
+        ucr = -result[1]
 
         return phicr, ucr
+
+        #
+        # HP = self.HP
+        # phis = self.phis
+        # phi_max = (1 - 2 * self.phis) / (1 + HP['pc'])
+        # # ini1, ini3, ini2 = 1e-6, 1e-2, phi_max*2/3
+        #
+        # if self.cri_pre_calc:
+        #     u1 = self.cri_u_solve(ini1, phis)
+        #     u2 = self.cri_u_solve(ini2, phis)
+        #     u3 = self.cri_u_solve(ini3, phis)
+        #     while min(u1, u2, u3) != u3:
+        #         if u1 >= u2:
+        #             ini3 = (ini2 + ini3) / 2
+        #         else:
+        #             ini3 = (ini1 + ini3) / 2
+        #
+        #     u3 = self.cri_u_solve(ini3, 0)
+        # result = sco.brent(self.cri_u_solve, args=(phis,), brack=(ini1, ini3, ini2), full_output=True)
+        #
+        # phicr, ucr = result[0], result[1]
+        #
+        # return phicr, ucr
 
     def cri_u_solve(self, phi, phis):
         return sco.brenth(self.ddf_u, 0.0001, 1000, args=(phi, phis))

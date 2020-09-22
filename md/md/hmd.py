@@ -17,7 +17,8 @@ class HMD(analysis.Analysis):
         self.residue_dict = dict(definitions.residues)
 
         self.low_mem = low_mem
-        self.equil_frames = kwargs.get('equil_frames', 300)
+        self.every_frames, self.last_frames = kwargs.get('every', 10),  kwargs.get('total', None)
+        self.equil_frames = 300
 
         self.slab = self._is_slab()
         self.data = self.get_data()
@@ -28,10 +29,9 @@ class HMD(analysis.Analysis):
         self.chain_atoms = len(self.sequence)
         self.chains = self.get_n_chains()
         self.masses = self._get_masses()
-        self.structures = self.get_structures()
+        self.structures = self.get_structures(every=self.every_frames, total=self.last_frames)
         self.protein = self.get_protein_from_sequence()
         super().__init__(framework='HMD')
-
 
     def _get_hmd_files(self):
         hmd = glob.glob(os.path.join(self.md_dir, '*.py'))
@@ -119,7 +119,7 @@ class HMD(analysis.Analysis):
                     break
         return np.array(temperatures, dtype='float')
 
-    def get_structures(self):
+    def get_structures(self, every=1, total=None):
         dcds = glob.glob(os.path.join(self.md_dir, '*.dcd'))
         if len(dcds) > 1:
             dcds = sorted(dcds, key=lambda x: int(re.findall(r'\d+', os.path.basename(x))[0]))
@@ -128,10 +128,15 @@ class HMD(analysis.Analysis):
             topo = os.path.join(self.md_dir, 'topo.pdb')
         else:
             return SystemError("Topology not found, but only looked for a file named topo.pdb")
+        n_frames = []
         for dcd in dcds:
             tr = md.load(dcd, top=topo)
             tr.xyz = tr.xyz * 10. * 10.
-            structures.append(tr[self.equil_frames:])
+            tr = tr[self.equil_frames::self.every_frames]
+            tr = tr[:total]
+            structures.append(tr)
+            n_frames.append(tr.n_frames)
+        print(f"> Taking frames every {every} for a total of {n_frames} to avoid strong correlations")
         return structures
 
     def save_frames(self, name, frames=100):

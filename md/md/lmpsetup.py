@@ -75,9 +75,10 @@ class LMPSetup:
         droplet_zlength = 500
         # self.slab_dimensions["x"] = 1.3*(self.chains*4*math.pi/3/droplet_zlength*self.rw_rg()**3)**0.5
         # self.slab_dimensions["x"] = 1.5*(self.chains*4*math.pi/3/droplet_zlength*self.rw_rg()**3)**0.5
-        self.slab_dimensions["x"] = 1.3*(self.chains * 4 * math.pi / 3 / droplet_zlength * self.rw_rg() ** 3) ** 0.5
+        # self.slab_dimensions["x"] = 1.3*(self.chains * 4 * math.pi / 3 / droplet_zlength * self.rw_rg() ** 3) ** 0.5
+        self.slab_dimensions["x"] = 130
         self.slab_dimensions["y"] = self.slab_dimensions["x"]
-        self.slab_dimensions["z"] = 5*droplet_zlength
+        self.slab_dimensions["z"] = 2300
         # self.slab_dimensions["z"] = 2800
 
         self.final_slab_volume = self.box_size["x"]/4
@@ -590,7 +591,9 @@ class LMPSetup:
             preface_file = open(os.path.join(self.this, 'templates/lmp/general/hps_preface.lmp'))
             preface_template = Template(preface_file.read())
             preface_subst = preface_template.safe_substitute(self.lmp_file_dict)
-            if self.slab:
+            if str(self.slab).lower() == 'npt':
+                lmp_temp_file = open(os.path.join(self.this, 'templates/lmp/general/hps_slab_npt.lmp'))
+            elif self.slab:
                 lmp_temp_file = open(os.path.join(self.this, 'templates/lmp/general/hps_slab.lmp'))
             # elif equil:
             #     lmp_temp_file = open(os.path.join(self.this, 'templates/general/hps_equil.lmp'))

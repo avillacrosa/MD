@@ -84,11 +84,14 @@ class fgRPA_ucst:
               ', phi_cri =', '{:.8e}'.format(phi_cri))
 
         # ============================ Set up u range =============================
+        ddu = du / 10
+        # umin = (np.floor(u_cri / ddu) + 1) * ddu
+        # uclose = (np.floor(u_cri / du) + 2) * du
 
         umax = u_cri * 1.5
-        hel = np.linspace(u_cri,umax,10)
+        hel = np.linspace(u_cri, umax, 10)
         du = hel[1]-hel[0]
-        ddu = du / 10
+        # ddu = du / 10
         umin = (np.floor(u_cri / ddu) + 1) * ddu
         uclose = (np.floor(u_cri / du) + 2) * du
 
@@ -138,8 +141,7 @@ class fgRPA_ucst:
 
         # calc_info = '_RPAFH_N{}_phis_{:.5f}_{}_eh{:.2f}_es{:.2f}_umax{:.2f}_du{:.2f}_ddu{:.2f}.txt'.format(
         #     N, phis, seq_name, ehs[0], ehs[1], new_umax, du, ddu)
-        calc_info = '_RPAFH_phis_{:.5f}_{}_eh{:.2f}_es{:.2f}.txt'.format(
-            phis, seq_name, ehs[0], ehs[1])
+        calc_info = '_RPAFH_phis_{:.5f}_{}_eh{:.2f}_es{:.2f}.txt'.format(phis, seq_name, ehs[0], ehs[1])
         if self.name is None:
             sp_file = '/home/adria/perdiux/prod/lammps/final/RPA/fg_ucst/sp' + calc_info
             bi_file = '/home/adria/perdiux/prod/lammps/final/RPA/fg_ucst/bi' + calc_info

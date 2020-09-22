@@ -494,6 +494,7 @@ class LMP(analysis.Analysis):
                 tr = tr[self.equil_frames::self.every_frames]
                 tr = tr[:total_frames]
                 tr.xyz = tr.xyz*10.
+                tr.unitcell_lengths *= 10.
             n_frames.append(tr.n_frames)
             structures.append(tr)
         # if total_frames is not None and not self.rerun and not self.silent:
