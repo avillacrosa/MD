@@ -6,8 +6,8 @@ errorbar.capsize: 4
 
 xtick.direction : in
 ytick.direction : in
-xtick.labelsize : 20
-ytick.labelsize : 20
+xtick.labelsize : 16
+ytick.labelsize : 16
 
 ytick.major.size:    12
 ytick.major.width:   1

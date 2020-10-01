@@ -140,7 +140,7 @@ class Analysis:
             structures = [structures[temperature]]
         for traj in structures:
             pairs = list(itertools.product(range(traj.top.n_atoms - 1), range(1, traj.top.n_atoms)))
-            d = md.compute_distances(traj, pairs)
+            d = md.compute_distances(traj, pairs).astype('float16')
             d = md.geometry.squareform(d, pairs)
             contact_map = d
             if contacts:
@@ -300,11 +300,11 @@ class Analysis:
         if ijs is None:
             tot_ijs, tot_means, err = self.ij_from_contacts()
         else:
-            tot_ijs, tot_means, err = ijs[0], ijs[1], ijs[2]
+            tot_ijs, tot_means, err = ijs[:,0,:], ijs[:,1,:], ijs[:,2,:]
 
         florys, r0s, covs = [], [], []
-        for T in range(len(self.get_temperatures())):
-            ij = tot_ijs
+        for T in range(ijs.shape[0]):
+            ij = tot_ijs[T]
             mean = tot_means[T]
             if r0 is None:
                 fit, fitv = curve_fit(full_flory_scaling, ij, mean, sigma=err[T])
@@ -468,6 +468,7 @@ class Analysis:
         Calculate rg from the LAMMPS trajectories simulations
         :param use: string, either lmp or md. If lmp get rg's from the log.lammps.T, if md from MDTraj
         :param full: whether we want rg for every frame or its average
+        :param save: text file where output will be saved
         :return: ndarray[T,frames], rg's
         """
         if self.c_rg is not None:
@@ -493,7 +494,6 @@ class Analysis:
                         tr = tr.atom_slice(atom_slice)
                         rg += md.compute_rg(tr)
                     rg /= self.chains
-                    rg = rg * 10
                 else:
                     rg = md.compute_rg(traj)
                 rgs.append(rg)
