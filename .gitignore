@@ -78,6 +78,8 @@ docs/_build/
 # PyBuilder
 target/
 
+
+
 # Jupyter Notebook
 .ipynb_checkpoints
 
@@ -133,3 +135,11 @@ dmypy.json
 .pyre/
 /profasi/.idea/
 /profasi/.idea/
+/md/temp/
+
+/bin/*
+!/bin/example.py
+/notebooks/*
+!/notebooks/Example.ipynb
+/temp/*
+/temp/.temp
