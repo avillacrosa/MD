@@ -1,3 +1,0 @@
-
-group nexp id $fix_group
-fix           nexpf   all rigid group 1 nexp

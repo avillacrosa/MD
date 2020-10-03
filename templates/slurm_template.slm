@@ -1,0 +1,17 @@
+#!/bin/bash
+#SBATCH -J $jobname
+#SBATCH -e err_$temp.HPS
+#SBATCH -o out_$temp.HPS
+#SBATCH -p std
+#SBATCH --ntasks=$np
+#SBATCH --time=5-0:00
+
+module purge
+module load apps/lammps/31Aug2018
+
+cp $in_files $SCRATCH
+cd $SCRATCH
+
+$command
+
+cp * $SLURM_SUBMIT_DIR
