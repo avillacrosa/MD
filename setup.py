@@ -1,20 +1,23 @@
 from setuptools import setup
 import subprocess
 import sys
+import shutil
+import os
 
 
-__project__ = "HPS_writer"
-__version__ = "1.0.0"
-__description__ = "IQAC md writer"
-__packages__ = ["md"]
-__required__ = ["mdanalysis","mdtraj"]
 
 subprocess.check_call([sys.executable, "-m", "pip", "install", "mdtraj"])
 
 setup(
-    name = __project__,
-    version = __version__,
-    description = __description__,
-    packages = __packages__,
+    name = "HPS_writer",
+    version = "1.0.0",
+    description = "IQAC md writer",
+    packages = ["md"],
     install_requires = ["pathos","mdanalysis"],
+    package_data={'': [x[0].replace('md/','')+"/*" for x in os.walk('md/data')]}
 )
+
+
+shutil.rmtree('build')
+shutil.rmtree('dist')
+shutil.rmtree('HPS_writer.egg-info')

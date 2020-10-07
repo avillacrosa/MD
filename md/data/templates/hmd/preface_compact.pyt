@@ -23,7 +23,6 @@ hps_lj = 0.2      # kcal/mol
 # Convert to HOOMD units: energy = kJ/mol, distance = nm,
 spring_k = spring_k * 4.184 * 100. * 2.
 spring_r0 = spring_r0 / 10
-hps_lj = hps_lj * 4.184
 
 $explicit_potential_code
 
@@ -69,7 +68,7 @@ for i in range(len(particle_types)):
         hps_table.pair_coeff.set(aa_i, aa_j, func=HPS_potential,
                                  rmin=0.2,
                                  rmax=3*sigma/10,
-                                 coeff=dict(eps=hps_lj, lambd=lambd, sigma=sigma/10))
+                                 coeff=dict(eps=hps_lj*4.184, lambd=lambd, sigma=sigma/10))
 
 yukawa = hoomd.md.pair.yukawa(r_cut=3.5, nlist=nl)
 for i in range(len(particle_types)):

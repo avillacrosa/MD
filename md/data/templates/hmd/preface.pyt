@@ -8,12 +8,13 @@ import scipy.constants as cnt
 temperature = $temperature
 l = $box_size
 water_perm = $water_perm
-particles = pd.read_csv('residues.txt', sep=" ", header=0, index_col=0).drop("RES",1)
-particle_types = list(particles.index)
 
-lambdas = pd.read_csv(f'lambdas_{temperature:.0f}.txt', sep=" ", header=0, index_col=0).drop("RES",1)
-epsilons = pd.read_csv(f'epsilons_{temperature:.0f}.txt', sep=" ", header=0, index_col=0).drop("RES",1)
-sigmas = pd.read_csv('sigmas.txt', sep=" ", header=0, index_col=0).drop("RES",1)
+particles_df = pd.read_csv('residues.txt', sep=" ", header=0, index_col=0)
+particle_types = list(particles_df.index)
+
+lambdas = pd.read_csv(f'lambdas_{temperature:.0f}.txt', sep=" ", header=0, index_col=0)
+epsilons = pd.read_csv('epsilons.txt', sep=" ", header=0, index_col=0)
+sigmas = pd.read_csv('sigmas.txt', sep=" ", header=0, index_col=0)
 
 protein = "$protein"
 chains = $chains
@@ -25,12 +26,10 @@ boltzmann_hmd = cnt.Boltzmann/1000.*cnt.Avogadro
 # HPS PARAMETERS FROM https://pubs.acs.org/doi/10.1021/acscentsci.9b00102 (Temperature-Controlled Liquid–Liquid Phase...)
 spring_k = 9.6     # kcal/(mol * Ang)
 spring_r0 = 3.8   # Ang
-hps_lj = 0.2      # kcal/mol
 
 # Convert to HOOMD units: energy = kJ/mol, distance = nm,
 spring_k = spring_k * 4.184 * 100. * 2.
 spring_r0 = spring_r0 / 10
-hps_lj = hps_lj * 4.184
 
 $explicit_potential_code
 
@@ -51,10 +50,10 @@ bond_arr = []
 for chain in range(chains):
     for i, aa in enumerate(sequence):
         j = i + chain*len(sequence)
-        snap.particles.typeid[j] = particles[aa]["id"]-1
-        snap.particles.mass[j] = particles[aa]["mass"]
-        snap.particles.diameter[j] = particles[aa]["sigma"]/10.
-        snap.particles.charge[j] = particles[aa]["q"]*cnt.e/q_hmd_factor
+        snap.particles.typeid[j] = particles_df["id"][aa]-1
+        snap.particles.mass[j] = particles_df["mass"][aa]
+        snap.particles.diameter[j] = sigmas[aa][aa]/10.
+        snap.particles.charge[j] = particles_df["q"][aa]*cnt.e/q_hmd_factor
         bond_arr.append([j, j + 1])
     del bond_arr[-1]
 snap.bonds.resize((len(sequence) - 1)*chains)
@@ -71,12 +70,13 @@ for i in range(len(particle_types)):
     aa_i = particle_types[i]
     for j in range(i, len(particle_types)):
         aa_j = particle_types[j]
-        lambd = $hps_scale * (particles[aa_i]["lambda"] + particles[aa_j]["lambda"]) / 2
-        sigma = (particles[aa_i]["sigma"] + particles[aa_j]["sigma"]) / 2
+        lambd = $hps_scale * lambdas[aa_i][aa_j]
+        sigma = sigmas[aa_i][aa_j]
+        eps = epsilons[aa_i][aa_j]
         hps_table.pair_coeff.set(aa_i, aa_j, func=HPS_potential,
                                  rmin=0.2,
                                  rmax=3*sigma/10,
-                                 coeff=dict(eps=hps_lj, lambd=lambd, sigma=sigma/10))
+                                 coeff=dict(eps=eps*4.184, lambd=lambd, sigma=sigma/10))
 
 yukawa = hoomd.md.pair.yukawa(r_cut=3.5, nlist=nl)
 for i in range(len(particle_types)):
@@ -84,9 +84,9 @@ for i in range(len(particle_types)):
     for j in range(i, len(particle_types)):
         aa_j = particle_types[j]
         cutoff=3.5
-        qi = particles[aa_i]["q"] * cnt.e
-        qj = particles[aa_j]["q"] * cnt.e
-        if particles[aa_i]["q"] == 0 or  particles[aa_j]["q"] == 0:
+        qi = particles_df["q"][aa_i] * cnt.e
+        qj = particles_df["q"][aa_j] * cnt.e
+        if particles_df["q"][aa_i] == 0 or  particles_df["q"][aa_j] == 0:
             cutoff=0
             qiqj = 0.
         else:
@@ -107,6 +107,6 @@ md.integrate.mode_standard(dt=0.01)
 lang = hoomd.md.integrate.langevin(group=hoomd.group.all(), kT=boltzmann_hmd*temperature, seed=4)
 for i in range(len(particle_types)):
     aa_i = particle_types[i]
-    mass = particles[aa_i]["mass"]
+    mass = particles_df["mass"][aa_i]
     lang.set_gamma(aa_i, mass/100)
     lang.set_gamma_r(aa_i, mass/100)

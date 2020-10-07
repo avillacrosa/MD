@@ -5,7 +5,7 @@ lang.disable()
 lang_cont = hoomd.md.integrate.langevin(group=hoomd.group.all(), kT=boltzmann_hmd*600, seed=4)
 for i in range(len(particle_types)):
     aa_i = particle_types[i]
-    mass = particles[aa_i]["mass"]
+    mass = particles_df["mass"][aa_i]
     lang.set_gamma(aa_i, mass/100)
     lang.set_gamma_r(aa_i, mass/100)
 

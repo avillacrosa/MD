@@ -4,10 +4,9 @@ import re
 import mdtraj as md
 import math
 import numpy as np
-import definitions
-import analysis
+import md.data.definitions as definitions
+from md import analysis
 import pathlib
-from scipy.optimize import curve_fit
 
 
 class HMD(analysis.Analysis):

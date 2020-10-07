@@ -1,26 +1,17 @@
 import itertools
-import shutil
 import mdtraj as md
 import math
 import scipy.constants as cnt
 import numpy as np
 import os
-import scipy
-import time
 import pathlib
-import definitions
-import lmp
-import lmpsetup
+from md import lmpsetup
 import pathos.multiprocessing as mp
-import multiprocessing as mpp
 import statsmodels.tsa.stattools
 from scipy.optimize import curve_fit, fsolve
 import MDAnalysis.analysis as mda
 import scipy.integrate as integrate
-from MDAnalysis.analysis import contacts as compute_contacts
-from numba import jit
 import pandas as pd
-import glob
 
 
 class Analysis:
@@ -513,74 +504,6 @@ class Analysis:
             np.savetxt(path, np.array([np.array(rgs), np.array(err)]))
         return np.array(rgs), np.array(err)
 
-    def phospho_rew(self, T, savefile, iters=10000, n_ps=7, temp_dir='/home/adria/P-rw', debye=0.1, total_frames=100000,
-                    model='HPS-T', scale=0.75):
-        its = []
-        pathlib.Path(temp_dir).mkdir(parents=True, exist_ok=True)
-        rgi = self.rg(full=True)[0][T]
-
-        shutil.copyfile(os.path.join(self.md_dir, f'topo.pdb'),
-                        os.path.join(temp_dir, f'topo.pdb'))
-
-        if self.last_frames is None:
-            rgi = rgi[-total_frames:]
-
-        def gen_ps():
-            ps = list(np.random.choice(range(len(self.sequence)), n_ps, replace=False))
-            if ps not in its:
-                its.append(list(ps))
-                return ps
-            else:
-                gen_ps()
-
-        for it in range(iters):
-            ps = gen_ps()
-            og_time = int(np.max(self.data[T, :, 0]))
-            og_save = int(self.data[T, 1, 0])
-
-            seq_to_l = np.array(list(self.sequence))
-            seq_to_l[ps] = 'D'
-            sequence = ''.join(seq_to_l)
-            # sequence = self.sequence
-
-            shutil.copyfile(os.path.join(self.md_dir, f'atom_traj_{T}.lammpstrj'),
-                            os.path.join(temp_dir, f'atom_traj_P_rw.lammpstrj'))
-
-            every = self.every_frames if self.every_frames is not None else 1
-            last = self.last_frames if self.last_frames is not None else total_frames
-
-            Ei = self.data[T, :, 1]
-            Ei = Ei[self.equil_frames::every]
-            Ei = Ei[-last:]
-
-            rerun = lmpsetup.LMPSetup(oliba_wd=temp_dir, protein='CPEB4',
-                                      debye=debye, temperatures=[self.temperatures[T]])
-            rerun.rerun_dump = f'atom_traj_P_rw.lammpstrj'
-            rerun.sequence = sequence
-            rerun.debye = 0.1
-            rerun.temperature = self.temperatures[T]
-            rerun.rerun_skip = every
-            rerun.model = model
-            # in timesteps
-            rerun.rerun_start = og_time + og_save - Ei.shape[0] * og_save * every
-            # in timesteps
-            rerun.rerun_stop = og_time
-            rerun.hps_scale = scale
-
-            rerun.write_hps_files(rerun=True, data=True, qsub=False, slurm=False, readme=False, rst=False, pdb=False,
-                                  silent=True)
-            rerun.run(file=os.path.join(temp_dir, 'lmp0.lmp'), n_cores=1)
-
-            rerun_analysis = lmp.LMP(md_dir=temp_dir, every=1)
-
-            Ef = rerun_analysis.data[0, :, 1]
-            weights = rerun_analysis.weights(Ei=Ei, Ef=Ef, T=self.temperatures[T])
-            weights = weights / np.sum(weights)
-            n_eff = self.n_eff_calc(weights)
-            reweight_rg = np.dot(rgi, weights.T)
-            with open(savefile, 'a+') as fout:
-                fout.write(f"{reweight_rg.mean():.3f} {n_eff:.3f} {rgi.mean():.3f} {ps}\n")
-
     # TODO : TDP USEFUL ONLY
     def topo_minimize(self, T, new_seq, temp_dir='/home/adria/TDP'):
         """
@@ -623,142 +546,6 @@ class Analysis:
         n_eff = self.n_eff(weights)
         rew_rg = np.dot(weights, self.rg()[T, :])
         return rrg.mean(), lmprg, rew_rg, n_eff
-
-    def maximize_charge(self, above_obj, below_obj, T, l0, eps0, method=None,
-                        temp_dir='/home/adria/OPT', total_frames=100000,
-                        savefile='/home/adria/results.txt', model='HPS-T',
-                        weight_cost_mean=1):
-        """
-        Optimize the radius of gyration difference between 2 independent LAMMPS run. The cost function is essentially
-        c = -(RgA - RgB)**2 + weight_cost_mean*((RgA+RgB)/2 - <Rg>)**2
-        :param a_dir: string, path leading to the run with RgA > RgB
-        :param b_dir: string, path leading to the run with RgB > RgA
-        :param T: int, temperature index where we optimize
-        :param method: string, "sto" or "opt" : if "opt" use scipy, if "sto" use custom ""random walk"" algorithm
-        :param temp_dir: string, path leading to a temporal directory where the rerun will be performed
-        :param I0: float, initial value for optimization over ionic strength in M. If None, don't optimize around it and assume I = 100 mM
-        :param l0: float, initial value for optimization over HPS scale. If None, don't optimize around it and assume HPS Scale = 1
-        :param eps0: float, initial value for optimization over medium permittivity. If None, don't optimize around it and assume a value of 80
-        :param savefile: string, path leading to a file where the result of the optimization will be saved
-        :param weight_cost_mean: float, weight given to the "distance from mean" term of the cost
-        :return: float, list, list: best cost, best values that give cost, neff of the best fit
-        """
-        print("RUNNING REWEIGHTING")
-        pathlib.Path(temp_dir).mkdir(parents=True, exist_ok=True)
-        x0 = np.array([l0, eps0])
-        above_tc, below_tc = above_obj, below_obj
-        rgiA, rgiB = above_tc.c_rg[0][T].mean(), below_tc.c_rg[0][T].mean()
-
-        def rg_rerun(T, eps, ls, prot):
-            data_dir = prot.md_dir
-            og_time = int(np.max(prot.data[T, :, 0]))
-            og_save = int(prot.data[T, 1, 0])
-
-            every = prot.every_frames if prot.every_frames is not None else 1
-            last = prot.last_frames if prot.last_frames is not None else total_frames
-            Ei = prot.data[T, :, 1]
-            Ei = Ei[prot.equil_frames::every]
-            Ei = Ei[-last:]
-            rgi = prot.c_rg[0][T]
-            if prot.last_frames is None:
-                rgi = rgi[-total_frames:]
-            protein = prot.protein
-
-            shutil.copyfile(os.path.join(data_dir, 'data.data'), os.path.join(temp_dir, f'data.data'))
-            if not os.path.exists(os.path.join(temp_dir, f'atom_traj_{protein}_{T}.lammpstrj')):
-                shutil.copyfile(os.path.join(data_dir, f'atom_traj_{T}.lammpstrj'),
-                                os.path.join(temp_dir, f'atom_traj_{protein}_{T}.lammpstrj'))
-
-            rerun = lmpsetup.LMPSetup(oliba_wd=temp_dir, protein=protein)
-            rerun.water_perm = eps
-            rerun.hps_scale = ls
-            rerun.save = og_save
-            rerun.model = model
-            rerun.debye_wv = 0.1
-            rerun.rerun_dump = f'atom_traj_{protein}_{T}.lammpstrj'
-            # in frames
-            rerun.rerun_skip = every
-            # in timesteps
-            rerun.rerun_start = og_time + og_save - Ei.shape[0] * og_save * every
-            # in timesteps
-            rerun.rerun_stop = og_time
-            rerun.temperatures = [prot.temperatures[T]]
-            rerun.box_size = {"x": 5000, "y": 5000, "z": 5000}
-            rerun.write_hps_files(rerun=True, data=False, qsub=False, rst=False, silent=True)
-            rerun.run(file=os.path.join(temp_dir, 'lmp0.lmp'), n_cores=1)
-            rerun_analysis = lmp.LMP(md_dir=temp_dir)
-            Ef = rerun_analysis.data[0, :, 1]
-            weights = rerun_analysis.weights(Ei=Ei, Ef=Ef, T=prot.temperatures[T])
-            weights = weights / np.sum(weights)
-            n_eff = self.n_eff_calc(weights)
-            reweight_rg = np.dot(rgi, weights.T)
-            return reweight_rg, n_eff
-
-        def calc_cost(x, T):
-            ls = x[0]
-            eps = x[1]
-            rw_above_rg, neff_a = rg_rerun(T=T, eps=eps, ls=ls, prot=above_tc)
-            rw_below_rg, neff_b = rg_rerun(T=T, eps=eps, ls=ls, prot=below_tc)
-            global rw_A
-            global rw_B
-            rw_A, rw_B = rw_above_rg, rw_below_rg
-            # c = - (rw_above_rg - rw_below_rg) ** 2 + weight_cost_mean * ((rw_below_rg + rw_above_rg) / 2 - mean_rg) ** 2
-            c = - (rw_above_rg - rw_below_rg) ** 2
-            print("=" * 80)
-            print(f"ls={ls}, eps={eps}, RgA_i={rgiA}, RgB_i={rgiB}")
-            # print(f"Rw RgA, {rw_A:.3f}, Rw RgB {rw_B:.3f}, diff {rw_A - rw_B:.2f}, dist to mean {(rw_below_rg + rw_above_rg) / 2 - mean_rg:.2f}, cost {c:.2f}")
-            print(f"Rw RgA, {rw_A:.3f}, Rw RgB {rw_B:.3f}, diff {rw_A - rw_B:.2f}, cost {c:.2f}")
-            print(f"Neff-A, {neff_a} Neff-B, {neff_b}")
-            print("=" * 80)
-            if method == 'opt':
-                return c
-            else:
-                return c, rw_A - rw_B, neff_a, neff_b, rw_A, rw_B
-
-        if method is None:
-            with open(savefile, 'a+') as writer:
-                cost, diff, neff_a, neff_b, rw_A, rw_B = calc_cost([l0, eps0], T)
-                return l0, eps0, diff, neff_a, neff_b, rw_A, rw_B
-        elif method == 'opt':
-            cons_all = ({'type': 'ineq', 'fun': lambda x: 0.95 - x[0]},
-                        {'type': 'ineq', 'fun': lambda x: x[0] - 0.85},
-                        {'type': 'ineq', 'fun': lambda x: 80 - x[1]},
-                        {'type': 'ineq', 'fun': lambda x: x[1] - 60})
-            m = scipy.optimize.minimize(fun=calc_cost, x0=np.array(x0), method="COBYLA", constraints=cons_all,
-                                        args=(T,))
-
-            print("=" * 80)
-            print(
-                f"For T={T} and initial parameters I = {I0}, eps = {eps0} with RgA = {above_tc.rg(use='md').mean(axis=1)[T]:.2f}, RgB = {below_tc.rg(use='md').mean(axis=1)[T]:.2f}")
-            print(f"Minimization resulted in {m.x[0]}  {m.x[1]} and reweighted Rg's A = {rw_A:.2f} and B = {rw_B:.2f}")
-            print("=" * 80)
-            result = "=============================================\n"
-            result += f'T={T}, I0={I0}, eps={eps0}, rgiAbove={rgiA}, rgiBelow={rgiB} \n'
-            result += f'If={m.x[0]}, eps={m.x[1]}, rgAboveF={rw_A}, rgBelowF={rw_B}\n'
-            result += "=============================================\n"
-            with open(f'minimization_{T}.txt', 'w+') as min:
-                min.write(result)
-
-            return m
-        elif method == 'sto':
-            best, best_params, best_neffs = 0, [], [-1, -1]
-            iterations = 50000
-            for it in range(iterations):
-                current = []
-                for x in x0:
-                    current.append(x * np.random.normal(1, 0.02, 1)[0])
-                cst, neff_a, neff_b = calc_cost(current, args=(T,))
-                if cst < best:
-                    best = cst
-                    best_params = current[:]
-                    best_neffs = [neff_a, neff_b]
-                    print("Saving at /home/adria/rew_test.txt", f'data/{savefile}')
-                    with open(savefile, 'a+') as fout:
-                        str_curr = ", ".join(map(str, current))
-                        fout.write(
-                            f"{it} {cst} {rw_A} {rw_B} {str_curr} {neff_a} {neff_b}\n")
-                    x0 = current
-            return best, best_params, best_neffs
 
     def get_correlation_tau(self):
         """

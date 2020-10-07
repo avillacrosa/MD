@@ -6,8 +6,6 @@
 #SBATCH $tasktype
 #SBATCH --time=6-0:00
 
-export HOOMD_WALLTIME_STOP=$((`date +%s` + 144 * 3600 - 10 * 60))
-
 module load conda/3
 conda activate $activate
 
