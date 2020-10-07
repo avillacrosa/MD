@@ -3,8 +3,7 @@ import os
 import inspect
 import pathlib
 import stat
-# from md import hpssetup
-import hpssetup
+from md import hpssetup
 from string import Template
 
 

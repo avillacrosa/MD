@@ -5,8 +5,7 @@ import mdtraj as md
 import multiprocessing as mp
 import pathlib
 from string import Template
-# from md import hpssetup
-import hpssetup
+from md import hpssetup
 from subprocess import run, PIPE
 
 
