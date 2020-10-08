@@ -112,7 +112,7 @@ class HPSSetup:
                 adder.xyz[0, :, :] += dist
                 chain = 1
                 centers_save = [dist]
-                rg_ext = self.rw_rg(monomer_l=0.55)
+                rg_ext = self.rw_rg(monomer_l=5.5)
 
                 def find_used(dist_d, centers_save_d):
                     for i, center in enumerate(centers_save_d):
@@ -165,31 +165,33 @@ class HPSSetup:
         if lambdas_file is None:
             lambdas_file = os.path.join(self.this, 'md/data/hps/lambdas.dat')
         lambdas_data = pd.read_csv(lambdas_file, sep=" ", header=0, index_col=0).drop("RES",1)
-        def convert_to_HPST(aa):
-            if aa["type"].lower() == "hydrophobic":
-                l = aa["lambda"] - 25.475 + 0.14537 * temp_K - 0.00020059 * temp_K ** 2
-            elif aa["type"].lower() == "aromatic":
-                l = aa["lambda"] - 26.189 + 0.15034 * temp_K - 0.00020920 * temp_K ** 2
-            elif aa["type"].lower() == "other":
-                l = aa["lambda"] + 2.4580 - 0.014330 * temp_K + 0.000020374 * temp_K ** 2
-            elif aa["type"].lower() == "polar":
-                l = aa["lambda"] + 11.795 - 0.067679 * temp_K + 0.000094114 * temp_K ** 2
-            elif aa["type"].lower() == "charged":
-                l = aa["lambda"] + 9.6614 - 0.054260 * temp_K + 0.000073126 * temp_K ** 2
+        def convert_to_HPST(key):
+            if bd[key]["type"].lower() == "hydrophobic":
+                l = lambdas_data["LAMBDA"][key] - 25.475 + 0.14537 * temp_K - 0.00020059 * temp_K ** 2
+            elif bd[key]["type"].lower() == "aromatic":
+                l = lambdas_data["LAMBDA"][key] - 26.189 + 0.15034 * temp_K - 0.00020920 * temp_K ** 2
+            elif bd[key]["type"].lower() == "other":
+                l = lambdas_data["LAMBDA"][key] + 2.4580 - 0.014330 * temp_K + 0.000020374 * temp_K ** 2
+            elif bd[key]["type"].lower() == "polar":
+                l = lambdas_data["LAMBDA"][key] + 11.795 - 0.067679 * temp_K + 0.000094114 * temp_K ** 2
+            elif bd[key]["type"].lower() == "charged":
+                l = lambdas_data["LAMBDA"][key] + 9.6614 - 0.054260 * temp_K + 0.000073126 * temp_K ** 2
             else:
-                t = aa["type"]
+                t = bd[key]["type"]
                 raise SystemError(f"We shouldn't be here...{t}")
             return l
-
-        if self.model.lower() == 'hps-t' or self.model.lower() == 'ghps-t':
-            for key in self.residue_dict:
-                self.residue_dict[key]["lambda"] = convert_to_HPST(self.residue_dict[key])
         bd = self.residue_dict
         lambdas_df = pd.DataFrame(np.zeros(shape=(len(bd), len(bd))), index=bd.keys(), columns=bd.keys())
-        epsilons = pd.DataFrame(np.ones(shape=(len(bd), len(bd)))*self.hps_epsilon, index=bd.keys(), columns=bd.keys())
+        if self.model.lower() == 'hps-t' or self.model.lower() == 'ghps-t':
+            for key in self.residue_dict:
+                # self.residue_dict[key]["lambda"] = convert_to_HPST(self.residue_dict[key])
+                lambdas_data["LAMBDA"][key] = convert_to_HPST(key)
         for aa_i in bd:
             for aa_j in bd:
                 lambdas_df[aa_i][aa_j] = (lambdas_data["LAMBDA"][aa_i] + lambdas_data["LAMBDA"][aa_j]) / 2
+
+        epsilons = pd.DataFrame(np.ones(shape=(len(bd), len(bd)))*self.hps_epsilon, index=bd.keys(), columns=bd.keys())
+
         return lambdas_df, epsilons
 
     def _get_KH_params(self):

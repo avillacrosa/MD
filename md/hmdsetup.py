@@ -130,15 +130,15 @@ class HMDSetup(hpssetup.HPSSetup):
         hmd_dict["explicit_pi_potential_code"] = inspect.getsource(HPS_pi_potential)
         hmd_dict["save"] = self.save
         hmd_dict["t"] = self.t
-        hmd_dict["context"] = f"--gpu={self.n_gpus[self.temperatures.index(temp_K)]}"
+        hmd_dict["context"] = f"--gpu={self.n_gpus[np.where(self.temperatures==temp_K)[0][0]]}"
         hmd_dict["water_perm"] = self.water_perm
         hmd_dict["contract_t"] = self.contract_t
         hmd_dict["slab_t"] = self.slab_t
-        hmd_dict["final_slab_x"] = round(self.slab_dimensions["x"], 2)
-        hmd_dict["final_slab_y"] = round(self.slab_dimensions["y"], 2)
-        hmd_dict["final_slab_z"] = round(self.slab_dimensions["z"], 2)
+        hmd_dict["final_slab_x"] = round(self.slab_dimensions["x"], 2)/10.
+        hmd_dict["final_slab_y"] = round(self.slab_dimensions["y"], 2)/10.
+        hmd_dict["final_slab_z"] = round(self.slab_dimensions["z"], 2)/10.
         hmd_dict["hps_scale"] = self.hps_scale
-        hmd_dict["debye"] = self.debye
+        hmd_dict["debye"] = self.debye * 10.
         return hmd_dict
 
     def _generate_slurm(self, temp_K):
