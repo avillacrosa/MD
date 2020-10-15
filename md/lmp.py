@@ -1,10 +1,8 @@
 import numpy as np
 import os
-import md.data.definitions as definitions
 import re
 import random
 import shutil
-import time
 import mdtraj as md
 import glob
 import multiprocessing as mp
@@ -19,15 +17,16 @@ class LMP(analysis.Analysis):
     It can also perform some basic transformations like reorder a replica exchange
     """
     def __init__(self, md_dir, force_reorder=False, equil_frames=0, silent=False, low_mem=False, **kwargs):
+        super().__init__(framework='LMP')
+
         self.md_dir = md_dir
-        self.this = os.path.dirname(os.path.dirname(__file__))
 
         self.silent = silent
         self.low_mem = low_mem
 
-        self.lmp2pdb = definitions.lmp2pdb
-        self.lmp = definitions.lmp
-        self.residue_dict = dict(definitions.residues)
+        # self.lmp2pdb = definitions.lmp2pdb
+        # self.lmp = definitions.lmp
+        # self.residue_dict = dict(definitions.residues)
 
         self.force_reorder = force_reorder
         self.temper = None
@@ -49,9 +48,8 @@ class LMP(analysis.Analysis):
             self.structures = None
             self.equil_frames = equil_frames
             self.temperatures = self.get_temperatures()
-            self.masses = self._get_masses()
+            # self.masses = self._get_masses()
             self.structures = self.get_structures(every=self.every_frames, total_frames=self.last_frames)
-        super().__init__(framework='LMP')
 
     def _get_masses(self):
         m = []
@@ -82,7 +80,7 @@ class LMP(analysis.Analysis):
         """
 
         sequence = self.get_seq_from_hps()
-        stored_seqs = glob.glob(os.path.join(definitions.hps_data_dir, 'sequences/*.seq'))
+        stored_seqs = glob.glob(os.path.join(self.this, 'md/data/sequences/*.seq'))
         for seq_path in stored_seqs:
             with open(seq_path, 'r') as seq_file:
                 seq = seq_file.readlines()[0]
@@ -425,7 +423,7 @@ class LMP(analysis.Analysis):
             seq.append(mass_dict[atom[2]])
         seq_str = ''.join(seq)
         seq_str = seq_str[:self.chain_atoms]
-        seqs_avail = glob.glob(f'{definitions.hps_data_dir}/sequences/*.seq')
+        seqs_avail = glob.glob(f'{self.this}md/data/sequences/*.seq')
         for seq_f in seqs_avail:
             with open(seq_f, 'r') as fin:
                 txt = fin.readlines()[0]

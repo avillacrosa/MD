@@ -4,16 +4,16 @@ import re
 import mdtraj as md
 import math
 import numpy as np
-import md.data.definitions as definitions
 from md import analysis
 import pathlib
 
 
 class HMD(analysis.Analysis):
     def __init__(self, md_dir, low_mem=False, **kwargs):
+        super().__init__(framework='HMD')
+
         self.md_dir = md_dir
         self.in_files = self._get_hmd_files()
-        self.residue_dict = dict(definitions.residues)
 
         self.low_mem = low_mem
         self.every_frames, self.last_frames = kwargs.get('every', 10),  kwargs.get('total', None)
@@ -22,15 +22,12 @@ class HMD(analysis.Analysis):
         self.slab = self._is_slab()
         self.data = self.get_data()
         self.box = self.get_box()
-        self.get_sigmas()
         self.temperatures = self.get_temperatures()
         self.sequence = self._get_sequence()
         self.chain_atoms = len(self.sequence)
         self.chains = self.get_n_chains()
-        self.masses = self._get_masses()
         self.structures = self.get_structures(every=self.every_frames, total=self.last_frames)
         self.protein = self.get_protein_from_sequence()
-        super().__init__(framework='HMD')
 
     def _get_hmd_files(self):
         hmd = glob.glob(os.path.join(self.md_dir, '*.py'))
@@ -40,13 +37,6 @@ class HMD(analysis.Analysis):
             with open(os.path.join(self.md_dir, h_file), 'r') as lmp_file:
                 hmd_files.append(lmp_file.readlines())
         return hmd_files
-
-    def _get_masses(self):
-        m = []
-        for chain in range(self.chains):
-            for aa in self.sequence:
-                m.append(self.residue_dict[aa]["mass"])
-        return np.array(m)
 
     def _is_slab(self):
         for file in self.in_files:
@@ -165,7 +155,7 @@ class HMD(analysis.Analysis):
         :return: Name (string) of the protein
         """
         sequence = self.get_seq_from_hmd()
-        stored_seqs = glob.glob(os.path.join(definitions.hps_data_dir, 'sequences/*.seq'))
+        stored_seqs = glob.glob(os.path.join(self.this, 'md/data/sequences/*.seq'))
         for seq_path in stored_seqs:
             with open(seq_path, 'r') as seq_file:
                 seq = seq_file.readlines()[0]
@@ -173,12 +163,6 @@ class HMD(analysis.Analysis):
                 if sequence.replace('L', 'I') == seq.replace('L', 'I'):
                     protein = os.path.basename(seq_path).replace('.seq', '')
                     return protein
-
-    def get_sigmas(self):
-        for key in self.residue_dict:
-            for sig_key in definitions.sigmas:
-                if self.residue_dict[key]["name"] == sig_key:
-                    self.residue_dict[key]["sigma"] = definitions.sigmas[sig_key]
 
     def save_lammpstrj(self, traj, fname, center=False):
         """

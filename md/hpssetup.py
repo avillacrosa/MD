@@ -195,17 +195,19 @@ class HPSSetup:
         return lambdas_df, epsilons
 
     def _get_KH_params(self):
-        miya_jern = pd.read_csv(os.path.join(self.this,'md/data/kh_f.dat', sep=" ", index_col=0))
+        kh_nrg = pd.read_csv(os.path.join(self.this,'md/data/kh/kh_f.dat'), sep=" ", index_col=0)
 
         bd = self.residue_dict
         lambdas = pd.DataFrame(np.zeros(shape=(len(bd), len(bd))), index=bd.keys(), columns=bd.keys())
-        epsilons = pd.DataFrame(np.zeros(shape=(len(bd), len(bd))), index=bd.keys(), columns=bd.keys())
         for aa_i in bd:
             for aa_j in bd:
-                epss = miya_jern[aa_i][aa_j] / self.kh_alpha + self.kh_eps0
-                lambda_ij = 1 if epss <= self.kh_eps0 else -1
+                # Really careful here, as actually kh_nrg = abs(alpha*(mj_nrg-kh_eps0)). In my set, however, (kh_f.dat)
+                # non-absolute values are given and then we apply the absolute
+                mj_nrg = kh_nrg[aa_i][aa_j] / self.kh_alpha + self.kh_eps0
+                lambda_ij = 1 if mj_nrg <= self.kh_eps0 else -1
                 lambdas[aa_i][aa_j] = lambda_ij
-        epsilons.values = np.abs(epsilons.values)
+        epsilons = kh_nrg
+        epsilons = epsilons.abs()
         return lambdas, epsilons
 
     def _get_interactions(self, temp_K):

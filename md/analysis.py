@@ -9,7 +9,7 @@ from md import lmpsetup
 import pathos.multiprocessing as mp
 import statsmodels.tsa.stattools
 from scipy.optimize import curve_fit, fsolve
-import MDAnalysis.analysis as mda
+import MDAnalysis.analysis.distances as mdad
 import scipy.integrate as integrate
 import pandas as pd
 
@@ -24,6 +24,15 @@ class Analysis:
     def __init__(self, framework):
         self.c_rg = None
         self.framework = framework
+        self.this = os.path.dirname(os.path.dirname(__file__))
+        self.residue_dict, _ = self._get_residue_dict()
+
+    def _get_masses(self):
+        m = []
+        for chain in range(self.chains):
+            for aa in self.sequence:
+                m.append(self.residue_dict[aa]["mass"])
+        return np.array(m)
 
     def multi_chain_contact_map(self, temperature=None, contact_cutoff=6):
         inter_maps = []
@@ -41,7 +50,7 @@ class Analysis:
             for frame in range(n_frames):
                 print(f"Doing frame : {frame}/{n_frames}", end='\r')
                 cf = coords[-frame, :, :]
-                contacts_frame += mda.distances.contact_matrix(cf, cutoff=contact_cutoff)
+                contacts_frame += mdad.contact_matrix(cf, cutoff=contact_cutoff)
             contacts_frame /= n_frames
             dd = np.zeros(shape=(self.chains, self.chains, self.chain_atoms, self.chain_atoms)) - 1
 
@@ -79,7 +88,7 @@ class Analysis:
             for frame in range(n_frames):
                 # print(f"Doing frame : {frame}/{n_frames}", end='\r')
                 cf = coords[-frame, :, :]
-                contacts_frame += mda.distances.contact_matrix(cf, cutoff=contact_cutoff)
+                contacts_frame += mdad.contact_matrix(cf, cutoff=contact_cutoff)
             contacts_frame /= n_frames
             intra_maps.append(contacts_frame)
         intra = np.array(intra_maps)
@@ -135,7 +144,7 @@ class Analysis:
             d = md.geometry.squareform(d, pairs)
             contact_map = d
             if contacts:
-                contact_map = mda.contacts.contact_matrix(contact_map, radius=6)
+                contact_map = mdad.contact_matrix(contact_map, radius=6)
             if normed:
                 contact_map -= d
             contact_maps.append(contact_map)
@@ -166,7 +175,7 @@ class Analysis:
                         d = md.geometry.squareform(d, flat_pairs) * 10
                         d = d[0]
                         if contacts:
-                            d = mda.contacts.contact_matrix(d, radius=6)
+                            d = mdad.contact_matrix(d, radius=6)
                         if c1 != c2:
                             inter.append(d)
                         elif c1 == c2:
@@ -244,7 +253,7 @@ class Analysis:
                         d = md.geometry.squareform(d, flat_pairs) * 10
                         d = d[0]
                         if contacts:
-                            d = mda.contacts.contact_matrix(d, radius=6)
+                            d = mdad.contact_matrix(d, radius=6)
                         if c1 != c2:
                             inter.append(d)
                         elif c1 == c2:
@@ -269,7 +278,7 @@ class Analysis:
         """
         if contacts is None:
             contacts = self.intra_distance_map()
-        d_ijs, ijs = [], np.arange(0, contacts.shape[2])
+        d_ijs, ijs = [], np.array([np.arange(0, contacts.shape[2])]*len(self.temperatures))
 
         for d in range(contacts.shape[2]):
             diag = np.diagonal(contacts, offset=int(d), axis1=2, axis2=3)
@@ -294,7 +303,7 @@ class Analysis:
             tot_ijs, tot_means, err = ijs[:,0,:], ijs[:,1,:], ijs[:,2,:]
 
         florys, r0s, covs = [], [], []
-        for T in range(ijs.shape[0]):
+        for T in range(len(self.temperatures)):
             ij = tot_ijs[T]
             mean = tot_means[T]
             if r0 is None:
@@ -546,6 +555,18 @@ class Analysis:
         n_eff = self.n_eff(weights)
         rew_rg = np.dot(weights, self.rg()[T, :])
         return rrg.mean(), lmprg, rew_rg, n_eff
+
+    def _get_residue_dict(self, residue_file=None, lambdas_file=None, sigmas_file=None):
+        if residue_file is None:
+            residue_file = os.path.join(self.this, 'md/data/general/residues.txt')
+        try:
+            residues = pd.read_csv(residue_file, sep=" ", header=0, index_col=0)
+        except:
+            raise SystemError("Could not load lambda, sigma or residue text file")
+
+        residues.columns = ["name", "mass", "q", "type"]
+        residues.insert(0, "id", np.arange(1, len(residues.index) + 1))
+        return residues.to_dict(orient='index'), residues
 
     def get_correlation_tau(self):
         """
@@ -962,6 +983,7 @@ class Analysis:
 
     def phase_diagram(self, cutoff_c=0.9, cutoff_d=0.1, full=False, intf_c_cutoff=None, intf_d_cutoff=None,
                       start_T=None, end_T=None):
+        self.masses = self._get_masses()
         dilute_densities = []
         condensed_densities = []
         for T in range(len(self.temperatures[start_T:end_T])):
@@ -1076,7 +1098,7 @@ def top_parallel_calc(initial_frame, final_frame, obj, i, flat_pairs):
                 d = d[0]
                 # if contacts:
                 if True:
-                    d = mda.contacts.contact_matrix(d, radius=6)
+                    d = mdad.contacts.contact_matrix(d, radius=6)
                 if c1 != c2:
                     inter.append(d)
                 elif c1 == c2:
@@ -1108,48 +1130,3 @@ def flory_scaling(r0):
         return r0 * (x ** flory)
 
     return flory
-
-# def interface_position_old(self, rho_z, slab_bins, cutoff=0.5):
-#     def tanh_fit(x, s, y0, x0):
-#         y = y0 - y0 * np.tanh((x + x0) * s)
-#         return y
-#
-#     minn_plus = rho_z[np.where(slab_bins >= 0)]
-#     minn_minus = rho_z[np.where(slab_bins <= 0)]
-#     # TODO ?
-#     # x_plus = np.linspace(0, slab_bins.max(), minn_plus.shape[0])
-#     print(minn_plus.shape[0])
-#     # x_plus = np.linspace(0, 650, minn_plus.shape[0])
-#     x_plus = np.arange(0, minn_plus.shape[0])
-#     # x_minus = np.linspace(slab_bins.min(), 0, minn_minus.shape[0])
-#     # x_minus = np.linspace(-10, 0, minn_minus.shape[0])
-#     x_minus = np.linspace(-100, 0, minn_minus.shape[0])
-#     try:
-#         # popt_plus, pcov_plus = curve_fit(tanh_fit, x_plus, minn_plus)
-#         popt_plus, pcov_plus = curve_fit(tanh_fit, x_plus, minn_plus)
-#         print("HERE", popt_plus)
-#         popt_minus, pcov_minus = curve_fit(tanh_fit, x_minus, minn_minus)
-#     except:
-#         print("> Interface fit failed, returning 0 (no interface) !!!")
-#         return 0, 0
-#
-#     xvals_plus = np.linspace(0, slab_bins.max(), 10000)
-#     fit_plus = tanh_fit(x_plus, *popt_plus)
-#     z_fit_plus = slab_bins[slab_bins > 0]
-#     yinterp = np.interp(xvals_plus, z_fit_plus, fit_plus)
-#     max_tan = yinterp.max()
-#     cutoff = max_tan * 0.9
-#     idx_interface_plus = np.argmin(np.abs(yinterp - cutoff))
-#     print(xvals_plus[idx_interface_plus])
-#
-#     xvals_minus = np.linspace(slab_bins.min(), 0, 10000)
-#     fit_minus = tanh_fit(x_minus, *popt_minus)
-#     z_fit_minus = slab_bins[slab_bins < 0]
-#     yinterp = np.interp(xvals_minus, z_fit_minus, fit_minus)
-#     max_tan = yinterp.max()
-#     cutoff = max_tan * 0.9
-#     idx_interface_minus = np.argmin(np.abs(yinterp - cutoff))
-#
-#     return z_fit_plus, minn_plus, fit_plus
-#     # return z_fit_minus, minn_minus, fit_minus
-#     # return xvals_plus[idx_interface_plus], xvals_minus[idx_interface_minus]
