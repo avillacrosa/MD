@@ -114,7 +114,6 @@ class LMPSetup(hpssetup.HPSSetup):
                 res_i = list(rd.keys())[i]
                 res_j = list(rd.keys())[j]
                 lambda_ij = lambdas[res_i][res_j]
-                lambda_ij = lambda_ij * self.hps_scale
                 sigma_ij = sigmas[res_i][res_j]
                 eps_ij = epsilons[res_i][res_j]
                 if rd[res_i]["q"] != 0 and rd[res_j]["q"] != 0:
@@ -315,19 +314,9 @@ class LMPSetup(hpssetup.HPSSetup):
 
         atoms, bonds = [], []
         k = 1
-        spaghetti = False
-        xyzs = []
         for chain in range(1, self.chains + 1):
-            # TODO CENTER SPAGHETTI BETTER...
-            if self.xyz is None:
-                xyz = [240., 240 + chain * 20, 240]
-                spaghetti = True
             for aa in self.sequence:
-                if spaghetti:
-                    xyz[0] += definitions.bond_length
-                    xyzs.append(xyz.copy())
-                else:
-                    xyz = self.xyz[0, k - 1, :]
+                xyz = self.xyz[0, k - 1, :]
                 atoms.append(f'     {k :3d}          {chain}    '
                              f'     {self.residue_dict[aa]["id"]:2d}   '
                              f'   {self.residue_dict[aa]["q"]*self.charge_scale: .2f}'
@@ -337,8 +326,6 @@ class LMPSetup(hpssetup.HPSSetup):
                 if k != chain * (len(self.sequence)):
                     bonds.append(f'     {k:3d}       1     {k:3d}     {k + 1:3d}\n')
                 k += 1
-        if spaghetti:
-            self.xyz = np.array([xyzs])
         data_dict["natoms"] = self.chains * len(self.sequence)
         data_dict["nbonds"] = self.chains * (len(self.sequence) - 1)
         data_dict["atom_types"] = len(self.residue_dict)
@@ -367,7 +354,7 @@ class LMPSetup(hpssetup.HPSSetup):
                     "command"] = f"/home/ramon/local/openmpi/202_gcc630/bin/mpirun -np {self.processors} /home/adria/local/lammps3/bin/lmp -partition {self.processors}x1 -in lmp.lmp"
         else:
             qsub_dict[
-                "command"] = f"/home/ramon/local/openmpi/202_gcc630/bin/mpirun -np {self.processors} /home/adria/local/lammps3/bin/lmp -in lmp{temp_K:0f}.lmp -log log_{temp_K:0f}.lammps"
+                "command"] = f"/home/ramon/local/openmpi/202_gcc630/bin/mpirun -np {self.processors} /home/adria/local/lammps3/bin/lmp -in lmp{temp_K:.0f}.lmp -log log_{temp_K:.0f}.lammps"
         qsub_dict["np"] = self.processors
         qsub_dict["host"] = self.host
         qsub_dict["jobname"] = self.job_name

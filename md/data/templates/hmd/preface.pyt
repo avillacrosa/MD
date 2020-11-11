@@ -1,8 +1,8 @@
-import mdtraj
 import hoomd
 from hoomd import md
 import math
 import pandas as pd
+import numpy as np
 import scipy.constants as cnt
 
 temperature = $temperature
@@ -41,10 +41,7 @@ snap = hoomd.data.make_snapshot(N=chains*len(sequence),
                                 bond_types=['harmonic'],
                                 particle_types=particle_types)
 
-poss = mdtraj.load_pdb(topo_path)
-# poss.center_coordinates()
-# MDtraj always divides by 10 when reading a pdb
-snap.particles.position[:] = poss.xyz - l / 2
+snap.particles.position[:] = np.genfromtxt('coords.txt')/10.
 
 bond_arr = []
 for chain in range(chains):
@@ -96,7 +93,7 @@ for i in range(len(particle_types)):
         yukawa.pair_coeff.set(aa_i, aa_j, kappa=$debye, epsilon=qiqj, r_cut=cutoff, r_on=cutoff)
 
 
-hoomd.analyze.log(filename=f"log_{temperature:.0f}.log", quantities=['potential_energy', 'bond_harmonic_energy', 'pair_yukawa_energy', 'pair_table_energy', 'temperature', 'lx', 'ly', 'lz'], period=$save, overwrite=True)
+hoomd.analyze.log(filename=f"log_{temperature:.0f}.log", quantities=['potential_energy', 'bond_harmonic_energy', 'pair_yukawa_energy', 'pair_table_energy', 'temperature', 'lx', 'ly', 'lz', 'time'], period=$save, overwrite=True)
 hoomd.dump.gsd(filename=f"trajectory_{temperature:.0f}.gsd", period=$save, group=hoomd.group.all(), overwrite=True)
 hoomd.dump.dcd(filename=f"trajectory_{temperature:.0f}.dcd", period=$save, group=hoomd.group.all(), overwrite=True, unwrap_full=True)
 

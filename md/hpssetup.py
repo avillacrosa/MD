@@ -9,6 +9,7 @@ import scipy.constants as cnt
 class HPSSetup:
 
     def __init__(self, md_dir, protein, model, chains, **kwargs):
+        self.this = os.path.dirname(os.path.dirname(__file__))
 
         #----- MD -----#
         self.t = kwargs.get('t', 100000000)
@@ -29,10 +30,15 @@ class HPSSetup:
         self.fix_region = kwargs.get('fix_region', None)
         self.fixed_atoms = None
         self.temper = kwargs.get('temper', False)
+        self.bond_length = 3.8 # In Ang
 
         #----- HPS -----#
         self.hps_epsilon = kwargs.get('hps_epsilon', 0.2)
         self.hps_scale = kwargs.get('hps_scale', 1.0)
+        if model.lower()=='hps' or model.lower()=='hps-t':
+            lambdas_file = kwargs.get('lambdas_file', os.path.join(self.this, 'md/data/hps/lambdas.dat'))
+            self.lambdas_data = pd.read_csv(lambdas_file, sep=" ", header=0, index_col=0).drop("RES",1)
+            self.lambdas_data *= self.hps_scale
 
         #----- gHPS ----#
         self.a6 = kwargs.get('a6', 0.8)
@@ -40,6 +46,7 @@ class HPSSetup:
         #----- KH -----#
         self.kh_alpha = 0.228
         self.kh_eps0 = -1
+        self.kh_scale = kwargs.get('kh_scale', 1.0)
 
         #----- SLAB -----#
         self.slab_t = kwargs.get('slab_t', 200000)
@@ -53,7 +60,6 @@ class HPSSetup:
         self.deformation_ts = kwargs.get('deformation_ts', 1)
 
         #---- PYTHON ----#
-        self.this = os.path.dirname(os.path.dirname(__file__))
         self.residue_dict, self.residue_df = self._get_residue_dict()
         self.key_ordering = list(self.residue_dict.keys())
         with open(os.path.join(self.this, f'md/data/sequences/{protein}.seq')) as f:
@@ -97,11 +103,26 @@ class HPSSetup:
         return rg
 
     def _get_topo(self):
-        struct = md.load_pdb(os.path.join(self.this, f'md/data/equil/{self.protein}.pdb'))
-        struct.xyz = struct.xyz*10.
-        struct.center_coordinates()
-        d = 4.0 * self.rw_rg(monomer_l=5.5) * (self.chains * 4 * math.pi / 3) ** (1 / 3)
-        struct.unitcell_lengths = np.array([[d, d, d]])
+        def build_string(L):
+            xyz = []
+            for at in range(len(self.sequence)):
+                xyz.append([0,at*bl-L/2,0])
+            xyz = np.array([xyz])
+            return xyz
+        try:
+            struct = md.load_pdb(os.path.join(self.this, f'md/data/equil/{self.protein}.pdb'))
+            struct.xyz = struct.xyz*10.
+            struct.center_coordinates()
+            d = 4.0 * self.rw_rg(monomer_l=5.5) * (self.chains * 4 * math.pi / 3) ** (1 / 3)
+            struct.unitcell_lengths = np.array([[d, d, d]])
+        except:
+            equi_dir = os.path.join(self.this, 'md/data/equil')
+            print(f"Equilibrated pdb not found at {equi_dir}, so a pdb with a single extended chain will be generated")
+            self.chains = 1
+            bl = self.bond_length
+            L = float(len(self.sequence) * bl)
+            struct = build_string(L)
+            d = L*1.3
 
         system = struct
         if self.chains > 1:
@@ -143,7 +164,6 @@ class HPSSetup:
         self.box_size["x"] = d
         self.box_size["y"] = d
         self.box_size["z"] = d
-        system.unitcell_lengths = np.array([[d, d, d]])
 
     def _get_sigmas(self, sigmas_file=None):
         rd = self.residue_dict
@@ -156,15 +176,12 @@ class HPSSetup:
                 sigmas_df[aa_i][aa_j] = (sigmas_data["SIGMA"][aa_i] + sigmas_data["SIGMA"][aa_j]) / 2
         return sigmas_df
 
-    def _get_HPS_params(self, temp_K, lambdas_file=None):
+    def _get_HPS_params(self, temp_K):
         """
         Get the HPS parameters to a python dict
         :return:
         """
 
-        if lambdas_file is None:
-            lambdas_file = os.path.join(self.this, 'md/data/hps/lambdas.dat')
-        lambdas_data = pd.read_csv(lambdas_file, sep=" ", header=0, index_col=0).drop("RES",1)
         def convert_to_HPST(key):
             if bd[key]["type"].lower() == "hydrophobic":
                 l = lambdas_data["LAMBDA"][key] - 25.475 + 0.14537 * temp_K - 0.00020059 * temp_K ** 2
@@ -182,9 +199,9 @@ class HPSSetup:
             return l
         bd = self.residue_dict
         lambdas_df = pd.DataFrame(np.zeros(shape=(len(bd), len(bd))), index=bd.keys(), columns=bd.keys())
+        lambdas_data = self.lambdas_data
         if self.model.lower() == 'hps-t' or self.model.lower() == 'ghps-t':
             for key in self.residue_dict:
-                # self.residue_dict[key]["lambda"] = convert_to_HPST(self.residue_dict[key])
                 lambdas_data["LAMBDA"][key] = convert_to_HPST(key)
         for aa_i in bd:
             for aa_j in bd:
@@ -208,6 +225,8 @@ class HPSSetup:
                 lambdas[aa_i][aa_j] = lambda_ij
         epsilons = kh_nrg
         epsilons = epsilons.abs()
+        epsilons *= self.kh_scale
+
         return lambdas, epsilons
 
     def _get_interactions(self, temp_K):
@@ -253,7 +272,6 @@ class HPSSetup:
                 tag = "CA"
                 xyz += f'ATOM  {c + 1:>5}{tag:>4}  {res_name} {chr(65 + n)} {i + 1:>3}    {coords[0]:>8.2f}{coords[1]:>8.2f}{coords[2]:>8.2f}  1.00  0.00      C \n'
                 c += 1
-            # TODO : Ovito stops reading after first TER...
         bonds = ''
         # for i in range(len(self.sequence) * self.chains):
         #     if (i + 1) % len(self.sequence) != 0: bonds += 'CONECT{:>5}{:>5} \n'.format(i + 1, i + 2)
@@ -261,6 +279,7 @@ class HPSSetup:
         pdb = header + xyz + bonds + bottom
         with open(os.path.join(self.md_dir, f'topo.pdb'), 'w+') as f:
             f.write(pdb)
+        np.savetxt(os.path.join(self.md_dir, "coords.txt"), self.xyz[0,:,:])
 
     def get_lambda_seq(self, window=9):
         """
@@ -349,7 +368,8 @@ class HPSSetup:
         out += f'║{" " * param_padding}{f" - Chains = {self.chains}":<{l}}{" " * (padding + padding - param_padding)}║\n'
         out += f'║{" " * param_padding}{f" - Debye length = {self.debye}":<{l}}{" " * (padding + padding - param_padding)}║\n'
         out += f'║{" " * param_padding}{f" - Medium Permittivity = {self.water_perm}":<{l}}{" " * (padding + padding - param_padding)}║\n'
-        out += f'║{" " * param_padding}{f" - Temperatures (K) = {self.temperatures}":<{l}}{" " * (padding + padding - param_padding)}║\n'
+        with np.printoptions(precision=1, suppress=True):
+            out += f'║{" " * param_padding}{f" - Temperatures (K) = {self.temperatures}":<{l}}{" " * (padding + padding - param_padding)}║\n'
         out += f'║{" " * param_padding}{f" - HPS Scale = {self.hps_scale}":<{l}}{" " * (padding + padding - param_padding)}║\n'
         out += f'╚{"═" * (l + padding * 2)}╝'
         print(out)

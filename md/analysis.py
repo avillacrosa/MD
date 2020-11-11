@@ -888,7 +888,7 @@ class Analysis:
         xa, slab_bins = bin_coms(bin_size=16)
         return xa, slab_bins
 
-    def density_profile(self, T=0, noise=False):
+    def density_profile(self, T=0, noise=False, pulse_cutoff=0.5):
 
         if noise:
             random_displacement = np.random.randint(-self.box["z"] / 2 * 0.5, self.box["z"] / 2 * 0.5,
@@ -927,7 +927,7 @@ class Analysis:
         caa = caa[:, (n_lags * 2 - len(slab_bins)):]
 
         pa = np.ones_like(caa)
-        pa[caa < 0.5] = 0
+        pa[caa < pulse_cutoff] = 0
         pa[:, 0] = 0
 
         xcc = np.zeros(shape=caa.shape)
